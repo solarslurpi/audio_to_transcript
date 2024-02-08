@@ -1,9 +1,8 @@
 
 import hashlib
 import logging
-from enum import Enum, auto
 from abc import ABC, abstractmethod
-from pydrive2.auth import GoogleAuth
+
 
 class TranscriptionTracker(ABC):
 
@@ -30,9 +29,6 @@ class TranscriptionTracker(ABC):
     def get_file_info_list(self):
         pass
 
-    @abstractmethod
-    def update_status(self, file_id, status):
-        pass
 
     @abstractmethod
     def remove_file(self, file_id):
@@ -53,38 +49,8 @@ class TranscriptionTracker(ABC):
     def store_file_info(self, file_info):
         pass
     
-    @staticmethod
-    def compute_hash(file_path):
-        hasher = hashlib.sha256()
-        with open(file_path, 'rb') as f:
-            buf = f.read()
-            hasher.update(buf)
-        return hasher.hexdigest()
-    
 
-    @staticmethod
-    def login_with_service_account():
-        """
-        Google Drive service with a service account.
-        note: for the service account to work, you need to share the folder or
-        files with the service account email.
 
-        :return: google auth
-        """
-        # Define the settings dict to use a service account
-        # We also can use all options available for the settings dict like
-        # oauth_scope,save_credentials,etc.
-        settings = {
-                    "client_config_backend": "service",
-                    "service_config": {
-                        "client_json_file_path": "service-account-creds.json",
-                    }
-                }
-        # Create instance of GoogleAuth
-        gauth = GoogleAuth(settings=settings)
-        # Authenticate
-        gauth.ServiceAuth()
-        return gauth
 
 
 

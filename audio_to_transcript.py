@@ -1,9 +1,9 @@
-import glob
+
 import re
 import os
-import time
 # from faster_whisper import WhisperModel
-from shared import update_task_status, setup_logger
+from shared import update_task_status, setup_logger, login_with_service_account
+from pydrive2.drive import GoogleDrive
 from workflowstatus_code  import WorkflowStatus
 from transformers import pipeline
 import torch
@@ -11,6 +11,7 @@ import asyncio
 # yt_dlp is a fork of youtube-dl that has stayed current with the latest YouTube isms.  Youtube-dl is no longer
 # supported so use yt_dlp.  It is more feature rich and up-to-date.
 import yt_dlp as youtube_dl
+from typing import Callable
 
 
 # Define a mapping of return codes to messages used by the YouTube download module.
@@ -32,6 +33,7 @@ class AudioToTranscript:
         self.model_name = model_name
         self.torch_compute_type = compute_type
         self.logger = setup_logger()
+        self.downloaded_file_path = None # See _process_hook()
 
 
     async def atranscribe(self, audio_file):
@@ -57,10 +59,20 @@ class AudioToTranscript:
         full_transcript = await loop.run_in_executor(None, transcribe_with_pipe)
         return full_transcript['text']
 
-    async def adownload_youtube_audio(self, youtube_url: str, download_folder: str) -> str:
+
+
+    async def adownload_youtube_audio(self, youtube_url: str):
+        directory = "./temp_mp3s"
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        # The _hook function defined within adownload_youtube_audio is a closure that captures the downloaded_file_path variable. This function is executed by yt-dlp when the download is finished, and it updates downloaded_file_path with the actual path of the downloaded file.
+        filename_template = f"{self.task_id}_temp.%(ext)s"
+        download_path_template = os.path.join(directory, filename_template)
+        # Corrected to use async operation with yt_dlp
         ydl_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": os.path.join(download_folder, f"{self.task_id}_temp.%(ext)s"),
+            "format": "mp3/bestaudio/best",
+            "logger": self.logger,
+            "outtmpl": download_path_template,
             "progress_hooks": [self._progress_hook],
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
@@ -69,50 +81,62 @@ class AudioToTranscript:
             }],
             "verbose": True,
         }
-        def _download():
 
+        async def download():
             with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-                try:
-                    ret_code = ydl.download([youtube_url])
-                    if ret_code != 0:
-                        error_message = ret_code_messages.get(ret_code, "An unknown error occurred.")
-                        self.logger.error(error_message)
-                        # Return the error code and message
-                        return {"ret_code": ret_code, "message": error_message}
-                    else:
-                        info = ydl.extract_info(youtube_url, download=False)
-                        original_filename = os.path.join(download_folder, f"{self.task_id}_temp.mp3")
-                        new_filename = os.path.join(
-                            download_folder, self._sanitize_title(info["title"]) + f"_{self.task_id}.mp3"
-                        )
-                        if os.path.exists(original_filename):
-                            os.replace(original_filename, new_filename)
-                            self.logger.debug(f"File successfully downloaded and processed: {new_filename}")
-                            # YAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAY
-                            # YIPEE! It all worked....
-                            # YAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAY
-                            message = f"{new_filename}"
-                            self.logger.debug(f"The file, {new_filename} has been successfully downloaded")
-                            return {"ret_code": 0, "message": message}
-                        else:
-                            error_message = ret_code_messages.get(ret_code, "An unknown error occurred.").format("original_filename")
+                # yt-dlp download is not natively async, so use thread or process pool
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(None, lambda: ydl.download([youtube_url]))
 
-                            self.logger.error(error_message)
-                            return {"ret_code": ret_code, "message": error_message}
-                except Exception as e:
-                    ret_code = -2
-                    error_message = ret_code_messages.get(ret_code, "An unknown error occurred.").format(e)
-                    self.logger.error(error_message)
-                    return {"ret_code": ret_code, "message": error_message}
+        await download()
+        mp3_filename = f"{self.task_id}_temp.mp3"
+        self.downloaded_file_path = os.path.join(directory, mp3_filename) 
+        update_task_status(self.task_id, WorkflowStatus.DOWNLOAD_COMPLETE, message=f"Download complete.  mp3 file saved to {self.downloaded_file_path}.")
+        # File has been downloaded (see _process_hook).  Pass back the file path.
+        if self.downloaded_file_path:
+            self.logger.debug(f"Success! File downloaded to {self.downloaded_file_path}")
+            return self.downloaded_file_path
+        else:
+            self.logger.error("Error downloading file.  No file path returned.")
+            update_task_status(self.task_id, WorkflowStatus.DOWNLOAD_FAILED, message="Error downloading file.")
+            return None
 
-        loop = asyncio.get_running_loop()
-        ret_code_message = await loop.run_in_executor(None, _download)
-        return ret_code_message
+    async def upload_to_gdrive(self, gdrive_folder_id: str):
+        # Perform authentication; this might be moved to a more central location in your application
+        gauth = login_with_service_account()
+        drive = GoogleDrive(gauth)
+
+        # Ensure `self.downloaded_file_path` is set to the path of the file to upload
+        if not self.downloaded_file_path or not os.path.exists(self.downloaded_file_path):
+            if self.logger:
+                self.logger.error("No file to upload or file does not exist.")
+            return
+
+        # Define the upload operation as a synchronous function
+        def upload_operation():
+            file_metadata = {
+                'title': os.path.basename(self.downloaded_file_path),
+                'parents': [{'id': gdrive_folder_id}]
+            }
+            gfile = drive.CreateFile(file_metadata)
+            gfile.SetContentFile(self.downloaded_file_path)
+            gfile.Upload()
+            gfile.content.close()
+
+            # Optionally, remove the local file after upload
+            os.remove(self.downloaded_file_path)
+
+            if self.logger:
+                self.logger.info(f"Uploaded {self.downloaded_file_path} to Google Drive.")
+
+        # Run the synchronous upload operation in the default executor
+        await asyncio.get_event_loop().run_in_executor(None, upload_operation)
 
 
     def _progress_hook(self, d):
         if d['status'] == 'finished':
-            update_task_status(self.task_id, "Download complete")
+            self.logger.debug(f"Done downloading.  The current file is {d['filename']}, now post-processing ...")
+
         elif d['status'] == 'downloading':
             update_task_status(self.task_id, WorkflowStatus.DOWNLOADING, message=f"Downloading: {d['filename']}, {d['_percent_str']}, {d['_eta_str']}",logger=self.logger)
         else:
@@ -124,119 +148,13 @@ class AudioToTranscript:
         sanitized_title = re.sub(r"[^\w\s-]", "", sanitized_title)
         return sanitized_title
 
+    async def download_youtube_audio_to_gdrive(self, yt_url:str, GDRIVE_FOLDER_ID:str, update_task_status_callback:Callable=update_task_status):
+        # If successful, this fills up the self.downladed_file_path because it created it and stored the mp3 bits in it.
+        await self.adownload_youtube_audio(yt_url)
+        if self.downloaded_file_path:
+            await self.upload_to_gdrive(GDRIVE_FOLDER_ID)
 
 
 
-    # Archiving, keeping just atranscribe() for now.
-    # def transcribe(self, audio_file):
-    #     # file_size = os.path.getsize(audio_file)
-
-    #     update_task_status( self.task_id, f"Loading Whisper model {self.model_name}")
-    #         # Initialize the ASR pipeline
-    #     pipe = pipeline("automatic-speech-recognition",
-    #                 model=self.model_name,
-    #                 device='cuda:0',
-    #                 torch_dtype=torch.float16)
-    #     update_task_status( self.task_id, f"Whisper model {self.model_name} has been loaded.")
-    #     full_transcript = pipe(audio_file, chunk_length_s=30, 
-    #     batch_size=8, 
-    #     return_timestamps=False)
-    #     return full_transcript['text']
-
-    # def download_youtube_audio(self, youtube_url: str, download_folder: str) -> str:
-    #     ydl_opts = {
-    #         "format": "bestaudio/best",
-    #         "outtmpl": os.path.join(download_folder, "temp.%(ext)s"),
-    #         "postprocessors": [
-    #             {
-    #                 "key": "FFmpegExtractAudio",
-    #                 "preferredcodec": "mp3",
-    #                 "preferredquality": "192",
-    #             }
-    #         ],
-    #         "verbose": True,
-    #     }
-    #     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-    #         ydl.download([youtube_url])
-    #         info = ydl.extract_info(youtube_url, download=False)
-    #         try:
-    #             original_filename = os.path.join(download_folder, "temp.mp3")
-    #             new_filename = os.path.join(
-    #                 download_folder, self._sanitize_title(info["title"]) + f"{self.task_id}" + .mp3"
-    #             )
-    #             os.replace(original_filename, new_filename)
-
-    #         except Exception as e:
-    #             print(f"An error occurred: {e}")
-    #     return new_filename
 
 
-
-    def _set_audios_list(self, audio_file_or_dir):
-        if os.path.isdir(audio_file_or_dir):
-            return glob.glob(os.path.join(audio_file_or_dir, "*.mp3"))
-        elif os.path.isfile(audio_file_or_dir):
-            return [audio_file_or_dir]
-        else:
-            raise ValueError("Either the audio file or the directory does not exist.")
-
-    def _process_audio_fastapi_file(self, task_id, audio_file, model):
-        
-        # Assume transcription_segments is a list where the first item is a generator
-        transcription_segments = model.transcribe(audio_file, beam_size=5)
-        segments_generator = transcription_segments[0]
-        
-        # Initialize an empty list to collect segments
-        segments_text = []
-        processed_segments = 0 # keep updating for status reporting.
-        update_interval = 10  # Update progress every 10 segments, for example
-        # Convert the generator into a list of text segments using a list comprehension
-        for segment in segments_generator:
-            segments_text.append(segment.text)
-            processed_segments += 1
-            if processed_segments % update_interval == 0:
-                update_task_status( self.task_id, f"Processed {processed_segments} segments...")
-        # Join all segments into one string
-        full_transcript = "".join(segments_text)
-        
-        # Return the full transcript text
-        return full_transcript
-
-
-    def _process_audio_file(self, audio_file, transcript_folder, model, start_time):
-        name_part = os.path.splitext(os.path.basename(audio_file))[0]
-        transcript_file = os.path.join(transcript_folder, name_part + ".txt")
-        transcript_file = transcript_file.replace("\\", "/")
-        if not os.path.isfile(transcript_file):
-            transcription_segments = model.transcribe(audio_file, beam_size=5)
-            if self.progress_callback:
-                progress_percentage = self._figure_percent_complete(start_time)
-                self.progress_callback(
-                    "Starting transcription of text segments...", progress_percentage
-                )
-            cnt = 0
-            with open(transcript_file, "w") as file:
-                segments_generator = transcription_segments[0]
-                for segment in segments_generator:
-                    file.write(segment.text)
-                    cnt += 1
-                    if cnt % 10 == 0:
-                        if self.progress_callback:
-                            progress_percentage = self._figure_percent_complete(
-                                start_time
-                            )
-                            self.progress_callback(
-                                f"Processed a total of {cnt} text segments...",
-                                progress_percentage,
-                            )
-                self.progress_callback(
-                    f"{transcript_file} of {cnt} text segments complete.", 100
-                )
-
-    def _figure_percent_complete(self, start_time) -> int:
-        elapsed_time = time.monotonic() - start_time
-        progress_percentage = (elapsed_time / TYPICAL_TRANSCRIPTION_TIME) * 100
-        progress_percentage = int(
-            min(progress_percentage, 100)
-        )  # Ensure it does not exceed 100%
-        return progress_percentage

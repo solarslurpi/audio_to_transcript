@@ -1,3 +1,4 @@
+service-account-creds.json
 # Prepend a slash (/) to ignore directories - this will ignore the directory in any subfolder too
 # Ignore pytest cache
 .pytest_cache/

@@ -8,15 +8,12 @@ import aiofiles
 import os
 import json
 from audio_to_transcript import AudioToTranscript
-from shared import create_task_id, get_task_status, update_task_status, status_dict, update_event, MODEL_NAMES_DICT, COMPUTE_TYPE_MAP
+from shared import create_task_id, get_task_status, update_task_status, setup_logger, status_dict, update_event, MODEL_NAMES_DICT, COMPUTE_TYPE_MAP
+from workflowstatus_code import WorkflowStatus
 # Add any other imports you might need for your custom logic or utility functions
 
-import logging
+logger = setup_logger()
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S')
 class TranscriptionOptions(BaseModel):
     model_name: str = "medium"  
     compute_type: Optional[str] = "float16"
@@ -56,15 +53,21 @@ async def transcribe_mp3(
     compute_type: Optional[str] = Form("float16")  # Default value as the default form value
 ):
     task_id = create_task_id() 
+    logger.debug(f"Created task_id: {task_id}")
+    update_task_status(task_id, WorkflowStatus.NEW_TASK_TRANSCRIPTION,message=f"New Task id for transcribing mp3 file {file.name} is {task_id}")
     transcription_request = TranscriptionOptions(model_name=model_name, compute_type=compute_type)
     if not file:
-         return {"task_id": task_id, "message": "No file was uploaded. Please check your inputs."}
+         message = "No file was uploaded. Please check your inputs."
+         logger.debug(message)
+         return {"task_id": task_id, "message": message}
     # Generate a unique task ID
      # Generate a unique task ID
     # Store model_name and filename in the global dictionary
     tasks_info[task_id] = {"model_name": model_name, "filename": file.filename}
 
     temp_file_path = f"./temp_files/{file.filename}"
+    # TODO: At some point we need to clean up the temp directory.
+    logger.debug(f"temp_file_path for saving the mp3 file into a temporary directory: {temp_file_path}")
     os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
 
     # Save the file in the temporary directory
@@ -79,22 +82,35 @@ async def transcribe_mp3(
 
     return {"task_id": task_id, "message": "Transcription starting..."}
 
-@app.post("/transcribe/yt")
-async def transcribe_youtube(
+@app.post("/youtube/download")
+async def download_youtube_audio(
     background_tasks: BackgroundTasks, 
-    yt_url: str = Form(...), 
-    model_name: str = Form("medium"), 
-    compute_type: Optional[str] = Form("float16")
+    yt_url: str = Form(...)
 ):
-    transcription_request = TranscriptionOptions(model_name=model_name, compute_type=compute_type)
+    """Endpoint to download YouTube audio as MP3 and upload to Google Drive."""
+    # To get the GDRIVE_FOLDER_ID, go to the folder in the GDrive web interface and click on the folder.
+    # The URL will look like this: https://drive.google.com/drive/folders/1234567890.  Where the numbers are the
+    # GDRIVE_FOLDER_ID string.
+    GDRIVE_FOLDER_ID = '1472rYLfk_V7ONqSEKAzr2JtqWyotHB_U'
+    logger.debug(f"GDRIVE_FOLDER_ID: {GDRIVE_FOLDER_ID}")
     task_id = create_task_id()
-    tasks_info[task_id] = {"model_name": model_name, "filename": ""}  # Filename to be updated post-download
+    logger.debug(f"Created task_id: {task_id}")
+    # Log the initiation of a new YouTube download task
+    update_task_status(task_id, WorkflowStatus.NEW_TASK_DOWNLOAD,message=f"New Task id for downloading the YouTube audio from the url {yt_url} is {task_id}")
 
-    # Since adownload_youtube_audio is async, directly await it here might block the response
-    # Instead, wrap its call and the following transcription in a background task
-    background_tasks.add_task(download_and_transcribe, yt_url, task_id, transcription_request.model_name, transcription_request.compute_type)
+    # Initialize an instance of AudioToTranscript to handle the download
+    yt_downloader = AudioToTranscript(task_id=task_id)
+    
+    # Add the download task to run in the background
+    background_tasks.add_task(
+        yt_downloader.download_youtube_audio_to_gdrive, 
+        yt_url, 
+        GDRIVE_FOLDER_ID, 
+        update_task_status_callback=update_task_status
+    )
 
-    return {"task_id": task_id, "message": "YouTube audio transcription in progress..."}
+    return {"task_id": task_id, "message": "YouTube audio download initiated. Check status for updates."}
+
 
 async def download_and_transcribe(yt_url, task_id, model_name, compute_type):
     # Initialize the transcription class

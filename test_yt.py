@@ -1,35 +1,25 @@
-import yt_dlp as youtube_dl
-import os
+import requests
 
-def progress_hook(d):
-    if d['status'] == 'downloading':
-        print(f"Downloading: {d['_percent_str']} of {d['_total_bytes_str']}")
-    elif d['status'] == 'finished':
-        print("Download complete")
+from shared import  setup_logger, BASE_URL,listen_for_status_updates
 
-def download_youtube_audio(youtube_url, download_folder):
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': os.path.join(download_folder, 'temp.%(ext)s'),
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-        'progress_hooks': [progress_hook],
-    }
-    
-    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([youtube_url])
+logger = setup_logger()
 
 def main():
+    yt_download_endpoint = f"{BASE_URL}/youtube/download"
     # Example YouTube video URL
     youtube_url = 'https://www.youtube.com/watch?v=hV5LxlQMnwM'
-    # Specify your download folder path here
-    download_folder = './downloads'
-    os.makedirs(download_folder, exist_ok=True)
 
-    download_youtube_audio(youtube_url, download_folder)
+    data = {
+        'yt_url': youtube_url,
+    }
+    # Specify your download folder path here
+    with requests.Session() as session:
+        response = session.post(yt_download_endpoint, data=data, stream=True)
+        if response.ok:
+            task_id = response.json().get('task_id')
+            listen_for_status_updates(task_id,logger)
+
+
 
 if __name__ == "__main__":
     main()

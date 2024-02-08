@@ -1,13 +1,17 @@
 import asyncio
 import logging
 import colorlog
+import os
 import torch
+import requests
+from sseclient import SSEClient
 from datetime import datetime
 import re
 from workflowstatus_code import WorkflowStatus
 from logging import Logger
+from pydrive2.auth import GoogleAuth
 
-
+BASE_URL = "http://127.0.0.1:8000"
 # Initialize an empty dictionary to act as the progress store
 status_dict = {}
 # Global event to signal updates
@@ -79,6 +83,55 @@ def setup_logger():
     logger.addHandler(stream_handler)
     return logger
 
+def login_with_service_account():
+    """
+    Google Drive service with a service account.
+    note: for the service account to work, you need to share the folder or
+    files with the service account email.
+
+    :return: google auth
+    """
+    # Define the settings dict to use a service account
+    # We also can use all options available for the settings dict like
+    # oauth_scope,save_credentials,etc.
+    settings = {
+                "client_config_backend": "service",
+                "service_config": {
+                    "client_json_file_path": "service-account-creds.json",
+                }
+            }
+    # Create instance of GoogleAuth
+    gauth = GoogleAuth(settings=settings)
+    # Authenticate
+    gauth.ServiceAuth()
+    return gauth
+    
+def upload_to_gdrive(drive, file_info):
+    # Initialize a file object and specify the ID of the file to download
+    directory = "./temp_mp3s"
+    if not os.path.exists(directory):
+        os.makedirs(directory)    
+    path = f"{directory}/{file_info.get('name')}"
+    file = drive.CreateFile({'id': file_info['id']})
+    # Download the file to a local file specified by local_path
+    file.GetContentFile(path)
+    return path
+
+def listen_for_status_updates(task_id, logger=None):
+    # The URL for receiving status updates, replace <base_url> with the actual base URL
+    status_url = f"{BASE_URL}/status/{task_id}/stream"
+    
+    # Create a session object to persist session across requests (optional)
+    session = requests.Session()
+    response = session.get(status_url, stream=True)
+    
+    # Create an SSEClient from the response
+    client = SSEClient(response)
+    for event in client.events():
+        # Here, `event.data` contains the status message
+        if logger:
+            logger.debug(f"Received event: {event.data}")
+        # Process the event.data as needed
 def attach_update_status_to_transformers_logger(task_id):
     # Get the logger for the 'transformers' library
     # This will give us transcription status updates on % done.
@@ -111,7 +164,7 @@ def create_task_id():
     return task_id
 
 
-def update_task_status(task_id:dict, status: WorkflowStatus, message:str=None, filename:str=None, logger:Logger=None):
+def update_task_status(task_id:str, status: WorkflowStatus, message:str=None, logger:Logger=None):
     if not task_id or not isinstance(status, WorkflowStatus):
         raise ValueError("Invalid task ID or status")
 
@@ -124,12 +177,6 @@ def update_task_status(task_id:dict, status: WorkflowStatus, message:str=None, f
     # If an additional message is provided, append it to the description
     if message:
         status_info["description"] += " - " + message
-
-    # If a filename is provided, add the download URL to the status info
-    if filename:
-        BASE_URL = 'http://localhost:8000/static/'  # Assuming BASE_URL is defined here or imported
-        download_url = f"{BASE_URL}/download/{task_id}"
-
 
     # Update the global status dictionary
     status_dict[task_id] = status_info
