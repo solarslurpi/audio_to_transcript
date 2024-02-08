@@ -1,0 +1,4 @@
+appmap_dir: tmp\appmap
+language: python
+name: audio_to_transcript
+packages: []
