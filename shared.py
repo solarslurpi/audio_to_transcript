@@ -1,9 +1,11 @@
 import asyncio
 import logging
+import colorlog
 import torch
 from datetime import datetime
 import re
 from workflowstatus_code import WorkflowStatus
+from logging import Logger
 
 
 # Initialize an empty dictionary to act as the progress store
@@ -43,6 +45,39 @@ class TaskStatusLoggingHandler(logging.Handler):
         log_entry = self.format(record)
         self.update_status_function(self.task_id, log_entry)
 
+def setup_logger():
+    """Set up the logger with colorized output"""
+    # Create a logger object
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)  # Set the logging level
+
+ # Define log format
+    log_format = (
+        "%(log_color)s[%(levelname)s]%(reset)s "
+        "%(log_color)s%(module)s:%(lineno)d%(reset)s - "
+        "%(message_log_color)s%(message)s"
+    )
+    colors = {
+        'DEBUG': 'green',
+        'INFO': 'yellow',
+        'WARNING': 'purple',
+        'ERROR': 'red',
+        'CRITICAL': 'bold_red',
+    }
+
+    # Create a stream handler (console output)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.DEBUG)  # Set the logging level for the handler
+
+    # Apply the colorlog ColoredFormatter to the handler
+    formatter = colorlog.ColoredFormatter(log_format, log_colors=colors, reset=True,
+                                          secondary_log_colors={
+                                              'message': colors
+                                          })
+
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
+    return logger
 
 def attach_update_status_to_transformers_logger(task_id):
     # Get the logger for the 'transformers' library
@@ -76,47 +111,38 @@ def create_task_id():
     return task_id
 
 
-def update_task_status(task_id, status: WorkflowStatus, message=None, filename=None):
-    BASE_URL = 'http://localhost:8000/static/'
-    if task_id:
-        status_info = {
-            "status": status.name,  # Static part: ENUM name
-            "description": message if message else status.value,  # Dynamic part: additional message or default description
-        }
-        if filename:
-            download_url = f"{BASE_URL}{filename}"
-            status_info["url"] = download_url
+def update_task_status(task_id:dict, status: WorkflowStatus, message:str=None, filename:str=None, logger:Logger=None):
+    if not task_id or not isinstance(status, WorkflowStatus):
+        raise ValueError("Invalid task ID or status")
 
-        # Assuming status_dict is a shared/global structure for tracking task statuses
-        status_dict[task_id] = status_info
-        print(f"Task {task_id} updated to {status_info}")
+    # Prepare the status information
+    status_info = {
+        "status": status.name,
+        "description": status.description
+    }
 
-        # Here, instead of setting an event, directly call the function to broadcast this update via SSE
-        broadcast_sse_update(task_id)
-    else:
-        raise ValueError(f"Invalid task ID {task_id}")
-    
-def update_task_status(task_id, status, filename=None):
-    BASE_URL = 'http://localhost:8000/static/'
-    if task_id:
-        if filename:
-            download_url = f"{BASE_URL}{filename}"
-            status_dict[task_id] = {"status": status, "url": download_url}
-        else:
-            print("-"*40)
-            print(f"str length of status: {len(status)} status: {status}")
-            print("-"*40)
-            new_status = extract_downloading_info(status)
-            if new_status:
-                print("-"*40)
-                print(f"NEW status: {new_status}")
-                print("-"*40)
-                status = new_status
-            status_dict[task_id] = {"status": status}
-            print(f"Task {task_id} updated to {status}")
-        update_event.set()
-    else:
-        raise ValueError(f"Invalid task ID {task_id}")
+    # If an additional message is provided, append it to the description
+    if message:
+        status_info["description"] += " - " + message
+
+    # If a filename is provided, add the download URL to the status info
+    if filename:
+        BASE_URL = 'http://localhost:8000/static/'  # Assuming BASE_URL is defined here or imported
+        download_url = f"{BASE_URL}/download/{task_id}"
+
+
+    # Update the global status dictionary
+    status_dict[task_id] = status_info
+
+    if logger:
+        logger.debug(f"Task {task_id} updated: {status_info}")
+
+    # Signal that an update has occurred to trigger any listening event streams
+    update_event.set()
+
+
+
+
 
 
 def get_task_status(task_id):

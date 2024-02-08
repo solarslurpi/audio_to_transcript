@@ -1,5 +1,5 @@
 from file_transcription_tracker import FileTranscriptionTracker
-from utilities import setup_logger
+from shared import setup_logger
 from pydrive2.drive import GoogleDrive
 import os
 import requests

@@ -3,19 +3,15 @@ import re
 import os
 import time
 # from faster_whisper import WhisperModel
-from shared import update_task_status
+from shared import update_task_status, setup_logger
+from workflowstatus_code  import WorkflowStatus
 from transformers import pipeline
 import torch
 import asyncio
 # yt_dlp is a fork of youtube-dl that has stayed current with the latest YouTube isms.  Youtube-dl is no longer
 # supported so use yt_dlp.  It is more feature rich and up-to-date.
 import yt_dlp as youtube_dl
-import logging
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S')
 
 # Define a mapping of return codes to messages used by the YouTube download module.
 ret_code_messages = {
@@ -35,6 +31,7 @@ class AudioToTranscript:
         self.task_id = task_id
         self.model_name = model_name
         self.torch_compute_type = compute_type
+        self.logger = setup_logger()
 
 
     async def atranscribe(self, audio_file):
@@ -42,7 +39,7 @@ class AudioToTranscript:
         def transcribe_with_pipe():
             return pipe(audio_file, chunk_length_s=30, batch_size=8, return_timestamps=False)
         def load_pipeline():
-            update_task_status(self.task_id, f"Loading model {self.model_name}")
+            update_task_status(self.task_id, WorkflowStatus.TRANSCRIBING, messasge= f"Loading model {self.model_name}",logger=self.logger)
             pipe = pipeline(
                 "automatic-speech-recognition",
                 model=self.model_name,
@@ -53,10 +50,10 @@ class AudioToTranscript:
             return pipe
         loop = asyncio.get_running_loop()
         # Update task status - this should ideally be an async function
-        await loop.run_in_executor(None, update_task_status, self.task_id, f"Starting processing {self.task_id}")
+        await loop.run_in_executor(None, update_task_status, self.task_id, WorkflowStatus.TRANSCRIBING,message=f"Starting processing {self.task_id}, logger=self.logger")
         # Process the audio file - This can also be a blocking call
         pipe = await loop.run_in_executor(None, load_pipeline)
-        await loop.run_in_executor(None, update_task_status, self.task_id, f"Transcribing.... {self.task_id}")
+        await loop.run_in_executor(None, update_task_status, self.task_id, WorkflowStatus.TRANSCRIBING,logger=self.logger)
         full_transcript = await loop.run_in_executor(None, transcribe_with_pipe)
         return full_transcript['text']
 
@@ -79,7 +76,7 @@ class AudioToTranscript:
                     ret_code = ydl.download([youtube_url])
                     if ret_code != 0:
                         error_message = ret_code_messages.get(ret_code, "An unknown error occurred.")
-                        logging.error(error_message)
+                        self.logger.error(error_message)
                         # Return the error code and message
                         return {"ret_code": ret_code, "message": error_message}
                     else:
@@ -90,22 +87,22 @@ class AudioToTranscript:
                         )
                         if os.path.exists(original_filename):
                             os.replace(original_filename, new_filename)
-                            logging.debug(f"File successfully downloaded and processed: {new_filename}")
+                            self.logger.debug(f"File successfully downloaded and processed: {new_filename}")
                             # YAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAY
                             # YIPEE! It all worked....
                             # YAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAYAY
                             message = f"{new_filename}"
-                            logging.debug(f"The file, {new_filename} has been successfully downloaded")
+                            self.logger.debug(f"The file, {new_filename} has been successfully downloaded")
                             return {"ret_code": 0, "message": message}
                         else:
                             error_message = ret_code_messages.get(ret_code, "An unknown error occurred.").format("original_filename")
 
-                            logging.error(error_message)
+                            self.logger.error(error_message)
                             return {"ret_code": ret_code, "message": error_message}
                 except Exception as e:
                     ret_code = -2
                     error_message = ret_code_messages.get(ret_code, "An unknown error occurred.").format(e)
-                    logging.error(error_message)
+                    self.logger.error(error_message)
                     return {"ret_code": ret_code, "message": error_message}
 
         loop = asyncio.get_running_loop()
@@ -117,7 +114,7 @@ class AudioToTranscript:
         if d['status'] == 'finished':
             update_task_status(self.task_id, "Download complete")
         elif d['status'] == 'downloading':
-            update_task_status(self.task_id, f"Downloading: {d['filename']}, {d['_percent_str']}, {d['_eta_str']}")
+            update_task_status(self.task_id, WorkflowStatus.DOWNLOADING, message=f"Downloading: {d['filename']}, {d['_percent_str']}, {d['_eta_str']}",logger=self.logger)
         else:
             update_task_status(self.task_id, f"{d['status']}")
 

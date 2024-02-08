@@ -1,7 +1,7 @@
 import asyncio
 
 from pydrive2.drive import GoogleDrive
-from utilities import setup_logger
+from shared import setup_logger
 from file_transcription_tracker import FileTranscriptionTracker
 # Path to your service account credential file
 
