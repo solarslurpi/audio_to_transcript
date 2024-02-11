@@ -8,11 +8,15 @@ import aiofiles
 import os
 import json
 from audio_to_transcript import AudioToTranscript
-from shared import create_task_id, get_task_status, update_task_status, setup_logger, status_dict, update_event, MODEL_NAMES_DICT, COMPUTE_TYPE_MAP
+from youtube_transfer import YouTubeTransfer
+from shared import get_task_status,MODEL_NAMES_DICT, COMPUTE_TYPE_MAP
 from workflowstatus_code import WorkflowStatus
+from logger_code import LoggerBase
+from file_transcription_tracker import FileTranscriptionTracker
+
 # Add any other imports you might need for your custom logic or utility functions
 
-logger = setup_logger()
+logger = LoggerBase.setup_logger()
 
 class TranscriptionOptions(BaseModel):
     model_name: str = "medium"  
@@ -89,24 +93,18 @@ async def download_youtube_audio(
 ):
     """Endpoint to download YouTube audio as MP3 and upload to Google Drive."""
     # To get the GDRIVE_FOLDER_ID, go to the folder in the GDrive web interface and click on the folder.
-    # The URL will look like this: https://drive.google.com/drive/folders/1234567890.  Where the numbers are the
-    # GDRIVE_FOLDER_ID string.
-    GDRIVE_FOLDER_ID = '1472rYLfk_V7ONqSEKAzr2JtqWyotHB_U'
-    logger.debug(f"GDRIVE_FOLDER_ID: {GDRIVE_FOLDER_ID}")
-    task_id = create_task_id()
-    logger.debug(f"Created task_id: {task_id}")
-    # Log the initiation of a new YouTube download task
-    update_task_status(task_id, WorkflowStatus.NEW_TASK_DOWNLOAD,message=f"New Task id for downloading the YouTube audio from the url {yt_url} is {task_id}")
+    # The URL will look like this: https://drive.google.com/drive/folders/1234567890.  Where the numbers are the ID.
+    tracker = FileTranscriptionTracker()
+    task_id = tracker.create_task_id()
+    yt_downloader = YouTubeTransfer(task_id)
 
-    # Initialize an instance of AudioToTranscript to handle the download
-    yt_downloader = AudioToTranscript(task_id=task_id)
+    tracker.update_task_status(task_id, WorkflowStatus.IDTRACKED)
+
     
     # Add the download task to run in the background
     background_tasks.add_task(
         yt_downloader.download_youtube_audio_to_gdrive, 
-        yt_url, 
-        GDRIVE_FOLDER_ID, 
-        update_task_status_callback=update_task_status
+        yt_url
     )
 
     return {"task_id": task_id, "message": "YouTube audio download initiated. Check status for updates."}
@@ -166,7 +164,7 @@ async def status_stream(request: Request, task_id: str):
             # Check if there's an update for the specific task_id
             if task_id in status_dict:
                 # Send the updated status to the client
-                yield f"data: {json.dumps(status_dict[task_id])}\n\n"
+                yield f"{json.dumps(status_dict[task_id])}\n\n"
             # Introduce a slight delay to prevent tight looping in case of rapid updates
     return EventSourceResponse(event_generator())
 

@@ -1,25 +1,30 @@
 from enum import Enum, auto
 
 class WorkflowStatus(Enum):
-    NEW_TASK_TRANSCRIPTION = auto(), "A task id for transcription has been created."
-    NEW_TASK_DOWNLOAD = auto(), "A task id for downloading a YouTube video has been created."
-    IDTRACKED = auto(), "The task ID is being tracked."
-    DOWNLOADING = auto(), "The YouTube audio is currently being downloaded."
-    DOWNLOAD_FAILED = auto(), "The YouTube audio download failed."
-    DOWNLOAD_COMPLETE = auto(), "The YouTube audio has been successfully downloaded."
-    TRANSCRIBING = auto(), "Transcription is in progress."
-    TRANSCRIBED = auto(), "Transcription has been completed."
-    ERROR = auto(), "An error occurred during the workflow."
-    VALIDATING = auto(), "The results are being validated."
-    COMPLETED = auto(), "The workflow task has been completed."
-    UNKNOWN = auto(), "The status of the task is unknown."
+    IDTRACKED = (auto(), "The task ID {task_id} is being tracked.")
+    DOWNLOADING = (auto(), "The YouTube audio for task ID {task_id} is currently being downloaded.")
+    DOWNLOAD_FAILED = (auto(), "The YouTube audio for task ID {task_id} download failed.")
+    DOWNLOAD_COMPLETE = (auto(), "The YouTube audio for task ID {task_id} has been successfully downloaded.")
+    UPLOAD_COMPLETE = (auto(), "The YouTube audio for task ID {task_id} has been successfully uploaded to Google Drive.")
+    TRANSCRIBING = (auto(), "Transcription for task ID {task_id} is in progress.")
+    TRANSCRIBED = (auto(), "Transcription for task ID {task_id} has been completed.")
+    ERROR = (auto(), "An error occurred for task ID {task_id} during the workflow.")
+    VALIDATING = (auto(), "The results are being validated.")
+    COMPLETED = (auto(), "The workflow for task ID {task_id} has been completed.")
+    UNKNOWN = (auto(), "The status of the task ID {task_id} is unknown.")
 
-# define the value-description pairs as tuples, and the custom __new__ method handles the creation of new enum members. 
-    def __new__(cls, value, description):
-        obj = object.__new__(cls)
-        obj._value_ = value
-        obj.description = description
-        return obj
+    def __init__(self, _value, description):
+        self._value_ = _value
+        self.description = description
 
-    def as_dict(self):
-        return {"code": self.value, "name": self.name, "description": self.description}
+    def format_description(self, task_id="(not provided)"):
+        """Format the description to include the task ID."""
+        return self.description.format(task_id=task_id)
+
+    def as_dict(self, task_id="(not provided)"):
+        """Return a dictionary representation of the status with formatted description."""
+        return {
+            "code": self.value,
+            "name": self.name,
+            "description": self.format_description(task_id=task_id)
+        }
