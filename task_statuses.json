@@ -1,0 +1,24 @@
+[
+    {
+        "mp3_gdrive_id": null,
+        "transcription_gdrive_id": null,
+        "mp3_gdrive_filename": null,
+        "transcribed_gdrive_filename": null,
+        "workflow_status": "IDTRACKED",
+        "description": "Example description 1",
+        "youtube_url": null,
+        "current_id": null,
+        "current_task": "youtube_download"
+    },
+    {
+        "mp3_gdrive_id": null,
+        "transcription_gdrive_id": null,
+        "mp3_gdrive_filename": null,
+        "transcribed_gdrive_filename": null,
+        "workflow_status": "DOWNLOADING",
+        "description": "Example description 2",
+        "youtube_url": null,
+        "current_id": null,
+        "current_task": "transcription"
+    }
+]

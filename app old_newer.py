@@ -9,7 +9,7 @@ import os
 import shutil
 import json
 from audio_to_transcript import AudioToTranscript
-from shared import create_task_id, get_task_status, update_task_status, status_dict, update_event, MODEL_NAMES_DICT, COMPUTE_TYPE_MAP
+from shared import create_task_id, get_task_status, update_task_status, status_dict, update_event, AUDIO_QUALITY_DICT, COMPUTE_TYPE_MAP
 # Add any other imports you might need for your custom logic or utility functions
 
 import logging
@@ -24,9 +24,9 @@ class TranscriptionOptions(BaseModel):
 
     @validator('model_name')
     def validate_model_name(cls, v):
-        if v is not None and v not in MODEL_NAMES_DICT.keys():
+        if v is not None and v not in AUDIO_QUALITY_DICT.keys():
             raise ValueError(f'{v} is not a valid model name.')
-        return MODEL_NAMES_DICT[v]
+        return AUDIO_QUALITY_DICT[v]
 
     @validator('compute_type')
     def validate_compute_type(cls, v):

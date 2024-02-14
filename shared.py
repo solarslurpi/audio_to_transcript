@@ -16,29 +16,6 @@ TRANSCRIBE_ENDPOINT = f"{BASE_URL}/transcribe/mp3"
 
 
 LOCAL_MP3_DIRECTORY = "./temp_mp3s"
-MODEL_NAME = "medium"
-COMPUTE_TYPE = "float16"
-
-MODEL_NAMES_DICT = {
-    "tiny": "openai/whisper-tiny",
-    "tiny.en": "openai/whisper-tiny.en",
-    "base": "openai/whisper-base",
-    "base.en": "openai/whisper-base.en",
-    "small": "openai/whisper-small",
-    "small.en": "openai/whisper-small.en",
-    "medium": "openai/whisper-medium",
-    "medium.en": "openai/whisper-medium.en",
-    "large": "openai/whisper-large",
-    "large-v2": "openai/whisper-large-v2",
-}
-
-COMPUTE_TYPE_MAP = {
-    "default": torch.get_default_dtype(),
-    # "int8": torch.int8,
-    # "int16": torch.int16,
-    "float16": torch.float16,
-    "float32": torch.float32,
-}
 
 
 

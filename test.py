@@ -1,27 +1,36 @@
-from shared import login_with_service_account
-from pydrive2.drive import GoogleDrive
+from pydantic import BaseModel
+from typing import Optional
+from enum import Enum
+import json
 
-# This is the ID of the folder you want to upload the file to.
-FOLDER_ID = '1472rYLfk_V7ONqSEKAzr2JtqWyotHB_U'
-auth = login_with_service_account()
-drive = GoogleDrive(auth)
-# Create a 'test.txt' file for demonstration purposes.
-with open('test.txt', 'w') as file:
-    file.write('This is a test file.')
+class TaskStatusEnum(str, Enum):
+    PENDING = "Pending"
+    IN_PROGRESS = "In Progress"
+    COMPLETED = "Completed"
 
-def upload_to_gdrive(file_name, folder_id):
-    # Authenticate the client using a service account
+class Task(BaseModel):
+    id: int
+    status: TaskStatusEnum
+    description: Optional[str] = None
+    url: Optional[str] = None
 
-    # Create a file on Google Drive
-    file_metadata = {
-        'title': file_name,
-        'parents': [{'id': folder_id}]
-    }
-    gfile = drive.CreateFile(file_metadata)
-    gfile.SetContentFile(file_name)
-    gfile.Upload()
+    # Define model configuration using ConfigDict for Pydantic v2  
+    class Config:
+        use_enum_values = True
+    # model_config = ConfigDict(
+    #     json_encoders={
+    #         TaskStatusEnum: lambda v: v.value,  # Convert Enum to its value for JSON serialization
+    #         HttpUrl: lambda v: str(v)  # Ensure HttpUrl is converted to string
+    #     }
+    # )
 
-    print(f"Uploaded file with ID: {gfile['id']}")
+# Demonstrate usage
+task1 = Task(id=1, status=TaskStatusEnum.PENDING, description="Sample task 1", url="https://example.com")
+task2 = Task(id=2, status=TaskStatusEnum.COMPLETED, description="Sample task 2", url="https://example.org")
 
-# Call the function to upload 'test.txt' to the specified Google Drive folder
-upload_to_gdrive('test.txt', FOLDER_ID)
+tasks_list = [task1, task2]
+tasks_dict = [task.model_dump() for task in tasks_list]  # Use model_dump for Pydantic v2
+# tasks_json = json.dumps(tasks_dict, indent=4)  # Serialize the list of dictionaries to JSON
+
+with open('test.json', 'w') as file:
+    json.dump(tasks_dict, file, indent=4)

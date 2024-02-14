@@ -1,1 +1,104 @@
-[{"name": "MichaelAldeanPatreon.mp3", "id": "1cDg_axskLD76musG6dAw-Es7XImjxFTw", "task_id": 9088, "status": "IDTRACKED"}]
+[
+    {
+        "mp3_gdrive_id": "1GNZxpHii2vz7Z61GF8KEg-kogYV0EmAu",
+        "transcription_gdrive_id": null,
+        "mp3_gdrive_filename": "temp_mp3s\\The Reasoning Behind Pruning",
+        "transcribed_gdrive_filename": null,
+        "workflow_status": "UPLOAD_COMPLETE",
+        "description": "The YouTube audio for task ID 1GNZxpHii2vz7Z61GF8KEg-kogYV0EmAu has been successfully uploaded to Google Drive.-",
+        "youtube_url": "https://www.youtube.com/watch?v=hV5LxlQMnwM&t=1s",
+        "current_id": "1GNZxpHii2vz7Z61GF8KEg-kogYV0EmAu",
+        "current_task": "youtube_download"
+    },
+    {
+        "mp3_gdrive_id": "1F53nsbXAoTPCSOkEB5W9gYgn28wM_c41",
+        "transcription_gdrive_id": null,
+        "mp3_gdrive_filename": "temp_mp3s\\Episode 125\uff1a The Latest in Biocontrols with Suzanne Wainwright Evans",
+        "transcribed_gdrive_filename": null,
+        "workflow_status": "UPLOAD_COMPLETE",
+        "description": "The YouTube audio for task ID 1F53nsbXAoTPCSOkEB5W9gYgn28wM_c41 has been successfully uploaded to Google Drive.-",
+        "youtube_url": "https://www.youtube.com/watch?v=QSjOEqVrRAk",
+        "current_id": "1F53nsbXAoTPCSOkEB5W9gYgn28wM_c41",
+        "current_task": "youtube_download"
+    },
+    {
+        "mp3_gdrive_id": [
+            "1472rYLfk_V7ONqSEKAzr2JtqWyotHB_U"
+        ],
+        "transcription_gdrive_id": "1O4NR1-sDnYarK7u8mFAUI0lHaUT92WA-",
+        "mp3_gdrive_filename": null,
+        "transcription_gdrive_filename": null,
+        "transcription_audio_quality": null,
+        "transcription_compute_type": null,
+        "workflow_status": "The task ID {task_id} is being tracked.",
+        "description": "The task ID 1O4NR1-sDnYarK7u8mFAUI0lHaUT92WA- is being tracked.-",
+        "youtube_url": null,
+        "current_id": "1O4NR1-sDnYarK7u8mFAUI0lHaUT92WA-",
+        "current_task": "transcription"
+    },
+    {
+        "mp3_gdrive_id": "1472rYLfk_V7ONqSEKAzr2JtqWyotHB_U",
+        "transcription_gdrive_id": "15rGed5uPg-_8tQgnVBy2TUep-bpH_wFs",
+        "mp3_gdrive_filename": null,
+        "transcription_gdrive_filename": null,
+        "transcription_audio_quality": null,
+        "transcription_compute_type": null,
+        "workflow_status": "The task ID {task_id} is being tracked.",
+        "description": "The task ID 15rGed5uPg-_8tQgnVBy2TUep-bpH_wFs is being tracked.-",
+        "youtube_url": null,
+        "current_id": "15rGed5uPg-_8tQgnVBy2TUep-bpH_wFs",
+        "current_task": "transcription"
+    },
+    {
+        "mp3_gdrive_id": "1472rYLfk_V7ONqSEKAzr2JtqWyotHB_U",
+        "transcription_gdrive_id": "1T1HGtu4t7474qTuLi7eIxja4VJwjvPSx",
+        "mp3_gdrive_filename": null,
+        "transcription_gdrive_filename": null,
+        "transcription_audio_quality": null,
+        "transcription_compute_type": null,
+        "workflow_status": "The task ID {task_id} is being tracked.",
+        "description": "The task ID 1T1HGtu4t7474qTuLi7eIxja4VJwjvPSx is being tracked.-",
+        "youtube_url": null,
+        "current_id": "1T1HGtu4t7474qTuLi7eIxja4VJwjvPSx",
+        "current_task": "transcription"
+    },
+    {
+        "mp3_gdrive_id": "1472rYLfk_V7ONqSEKAzr2JtqWyotHB_U",
+        "transcription_gdrive_id": "1jYRGqCQUwWkuxGh0Ax2eweVGpWUq_7dY",
+        "mp3_gdrive_filename": null,
+        "transcription_gdrive_filename": null,
+        "transcription_audio_quality": null,
+        "transcription_compute_type": null,
+        "workflow_status": "The task ID {task_id} is being tracked.",
+        "description": "The task ID 1jYRGqCQUwWkuxGh0Ax2eweVGpWUq_7dY is being tracked.-",
+        "youtube_url": null,
+        "current_id": "1jYRGqCQUwWkuxGh0Ax2eweVGpWUq_7dY",
+        "current_task": "transcription"
+    },
+    {
+        "mp3_gdrive_id": "1472rYLfk_V7ONqSEKAzr2JtqWyotHB_U",
+        "transcription_gdrive_id": "131AUohpXD9x9raln4m2jFGvuEke8X33u",
+        "mp3_gdrive_filename": null,
+        "transcription_gdrive_filename": null,
+        "transcription_audio_quality": null,
+        "transcription_compute_type": null,
+        "workflow_status": "The task ID {task_id} is being tracked.",
+        "description": "The task ID 131AUohpXD9x9raln4m2jFGvuEke8X33u is being tracked.-",
+        "youtube_url": null,
+        "current_id": "131AUohpXD9x9raln4m2jFGvuEke8X33u",
+        "current_task": "transcription"
+    },
+    {
+        "mp3_gdrive_id": "1472rYLfk_V7ONqSEKAzr2JtqWyotHB_U",
+        "transcription_gdrive_id": "1lrquY8SsMr51lHnS0epwLW9Ij0kbv6Qu",
+        "mp3_gdrive_filename": null,
+        "transcription_gdrive_filename": null,
+        "transcription_audio_quality": null,
+        "transcription_compute_type": null,
+        "workflow_status": "Transcription for task ID {task_id} is in progress.",
+        "description": "Transcription for task ID 1lrquY8SsMr51lHnS0epwLW9Ij0kbv6Qu is in progress.-",
+        "youtube_url": null,
+        "current_id": "1lrquY8SsMr51lHnS0epwLW9Ij0kbv6Qu",
+        "current_task": "transcription"
+    }
+]
