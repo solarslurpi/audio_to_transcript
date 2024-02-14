@@ -6,6 +6,7 @@ import asyncio
 from logger_code import LoggerBase
 from pydrive2.drive import GoogleDrive
 from pydrive2.auth import GoogleAuth
+from datetime import datetime
 from pydantic import BaseModel, Field, field_validator, ValidationError
 from typing import Optional
 from enum import Enum
@@ -24,6 +25,7 @@ class TaskUnit(str,Enum):
     TRANSCRIPTION = 'transcription'
 
 class TaskStatus(BaseModel):
+    last_modified: datetime = Field(default_factory=datetime.now)
     mp3_gdrive_id: GDriveID = Field(default=GDriveID.MP3_GDriveID)
     transcription_gdrive_id: GDriveID = Field(default=GDriveID.Transcription_GDriveID)
     mp3_gdrive_filename: Optional[str] = None
@@ -34,7 +36,7 @@ class TaskStatus(BaseModel):
     description: Optional[str] = None
     youtube_url: Optional[str] = None
     current_id: Optional[str] = None
-    current_task: Optional[TaskUnit] = None
+    current_task: Optional[str] = None
 
     class ConfigDict:
         # use_enum_values = True
@@ -198,7 +200,7 @@ class TranscriptionTracker(ABC):
             file.Delete()
             self.logger.debug(f"GDrive file deleted successfully.  The Google Drive ID is: {self.task_status.current_id}")
         except Exception as e:
-            self.logger.error(f"Error: {e} When attempting to delete the Google Drive file with Google Drive ID: {self.task_status.current_id}")    
+            self.logger.error(f"{e}")
             return False
         return True
 
@@ -243,26 +245,39 @@ class TranscriptionTracker(ABC):
         upload_operation()
     
 
-    async def download_from_gdrive(self, gdrive_id: str, destination_path: str):
+    async def download_from_gdrive(self, gdrive_id: str=None, destination_dir: str=None):
+        if not gdrive_id:
+            self.handle_error_message("The Google Drive ID must not be empty.")
+        if not destination_dir:
+            self.handle_error_message("The destination directory must not be empty.")
+        if not os.path.isdir(destination_dir):  
+            self.handle_error_message(f"The destination directory does not exist: {destination_dir}")
+
         def download_operation():
             try:
-                gauth = self.login_with_service_account()
+                gauth = GoogleAuth()
+                # Assuming login_with_service_account is a method that configures and returns a GoogleAuth instance
+                gauth = self.login_with_service_account()  
                 drive = GoogleDrive(gauth)
-                gfile = drive.CreateFile({'id': gdrive_id})  # Initialize GoogleDriveFile instance using file ID
+                gfile = drive.CreateFile({'id': gdrive_id})  # Initialize GoogleDriveFile instance with the file ID
+                gfile.FetchMetadata(fields='title')  # Fetch metadata to get the title (filename)
                 
-                gfile.GetContentFile(destination_path)  # Download file as specified in destination_path
+                destination_path = os.path.join(destination_dir, gfile['title'])
+                gfile.GetContentFile(destination_path)  # Download file using the original filename
+                
                 self.logger.info(f"Downloaded file with GDrive ID {gdrive_id} to {destination_path}")
-                return True
+                return destination_path
             except Exception as e:
+                self.tracker.send_error_message(error_msg)
                 error_msg = f"Error downloading file from Google Drive: {e}"
                 self.logger.error(error_msg)
                 self.task_status.workflow_status = WorkflowStatus.ERROR
                 self.update_task_status(message=error_msg)
-                # Consider re-raising the exception if you want the caller to handle it
-                return False
+                raise
 
         # Execute the synchronous PyDrive2 operation in an executor to not block the async loop
-        await asyncio.get_event_loop().run_in_executor(None, download_operation)
+        destination_path = await asyncio.get_event_loop().run_in_executor(None, download_operation)
+        return destination_path
 
     def attach_update_status_to_transformers_logger(self,task_id:str):
         # Get the logger for the 'transformers' library
@@ -284,7 +299,11 @@ class TranscriptionTracker(ABC):
         # To prevent log messages from propagating to the root logger and being printed to the console
         transformers_logger.propagate = False
     
-
+    def handle_error_message(self, error_message: str = ''):
+        self.logger.error(error_message)
+        self.workflow_status = WorkflowStatus.ERROR
+        self.update_task_status(message=error_message)
+        raise 
 
     @abstractmethod
     def update_store(self):

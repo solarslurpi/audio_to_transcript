@@ -74,22 +74,18 @@ async def transcribe_mp3(
 ):
     try:
         tracker.start_task_tracking(current_task="transcription")
-        tracker.create_task_id()
+        tracker.create_task_id()    
+        transcriber = AudioToTranscript(tracker)
+
+        background_tasks.add_task(
+            transcriber.transcribe, 
+            input_file,
+            audio_quality,
+            compute_type,
+        )
     except Exception as e:
-        logger.error(f"ERROR: {e}")
+        self.tracker._handle
         raise HTTPException(status_code=400, detail=f"Error in initializing the task tracker: ERROR: {e}")
-    # Create a unique id for this task. It is an important mechanism that follows the subtasks throughout the task and updates the status.
-    
-    
-    transcriber = AudioToTranscript(tracker)
-
-    background_tasks.add_task(
-        transcriber.transcribe, 
-        input_file,
-        audio_quality,
-        compute_type,
-    )
-
     return {"task_id": tracker.task_status.current_id, "message": "Transcription task started. Check status for updates."}
     
     # update_task_status(task_id, WorkflowStatus.NEW_TASK_TRANSCRIPTION,message=f"New Task id for transcribing mp3 file {file.name} is {task_id}")
@@ -200,7 +196,7 @@ async def status_stream(request: Request, task_id: str):
             # Clear the event to wait for the next update
             tracker.update_event.clear()
             # Check if there's an update for the specific task_id
-            yield f"{json.dumps(tracker.task_status)}\n\n"
+            yield f"{tracker.task_status.model_dump()}\n\n"
             # Introduce a slight delay to prevent tight looping in case of rapid updates
     return EventSourceResponse(event_generator())
 
