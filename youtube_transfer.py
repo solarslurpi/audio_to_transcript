@@ -10,6 +10,7 @@ import yt_dlp as youtube_dl
 
 
 class YouTubeTransfer():
+    directory = "./temp_mp3s"
     # Define a mapping of return codes to messages used by the YouTube download module.
     ret_code_messages = {
         0: "Successfully downloaded.",
@@ -28,16 +29,15 @@ class YouTubeTransfer():
         self.tracker.task_status.youtube_url = youtube_url
         self.tracker.task_status.workflow_status = WorkflowStatus.DOWNLOAD_STARTING
         self.tracker.update_task_status()
-        directory = "./temp_mp3s"
-        if not os.path.exists(directory):
-            os.makedirs(directory)
+        if not os.path.exists(self.directory):
+            os.makedirs(self.directory)
         # The _hook function defined within adownload_youtube_audio is a closure that captures the downloaded_file_path variable. This function is executed by yt-dlp when the download is finished, and it updates downloaded_file_path with the actual path of the downloaded file.
 
         # Corrected to use async operation with yt_dlp
         ydl_opts = {
             "format": "mp3/bestaudio/best",
             "logger": self.logger,
-            "outtmpl": os.path.join(directory, "%(title)s.%(ext)s"),
+            "outtmpl": os.path.join(self.directory, "%(title)s.%(ext)s"),
             "progress_hooks": [self._progress_hook],
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",

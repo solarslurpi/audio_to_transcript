@@ -18,3 +18,7 @@ CUDA_files/
 # others to ignore
 static/
 temp_files/
+.env
+temp_transcripts/
+temp_mp3s/
+tmp/appmap/

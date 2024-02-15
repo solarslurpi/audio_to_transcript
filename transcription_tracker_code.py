@@ -11,14 +11,16 @@ from pydantic import BaseModel, Field, field_validator, ValidationError
 from typing import Optional
 from enum import Enum
 import os
+from dotenv import load_dotenv
 
-AUDIO_QUALITY_DEFAULT = "medium"
-COMPUTE_TYPE_DEFAULT = "float16"
 
-# class GDriveID(str, Enum):
+load_dotenv()
+
+class Audio_Quality(str, Enum):
+    
 class GDriveID(str,Enum):
-    MP3_GDriveID = '1472rYLfk_V7ONqSEKAzr2JtqWyotHB_U',
-    Transcription_GDriveID = "1ZyUDWlSQbnQSaoI9WTKxeqegUiREuQv6"
+    MP3_GDriveID = os.getenv('MP3_GDRIVE_ID'),
+    Transcription_GDriveID = os.getenv('TRANSCRIPTION_GDRIVE_ID')
 
 class TaskUnit(str,Enum):
     YOUTUBE_DOWNLOAD = 'youtube_download'
@@ -209,11 +211,11 @@ class TranscriptionTracker(ABC):
         gauth = self.login_with_service_account()
         drive = GoogleDrive(gauth)
 
-        # Ensure `self.downloaded_file_path` is set to the path of the file to upload
+        # Ensure `downloaded_file_path` is set to the path of the file to upload
         if not downloaded_file_path or not os.path.exists(downloaded_file_path):
             self.logger.error("No file to upload or file does not exist.")
             self.task_status.workflow_status = WorkflowStatus.ERROR
-            self.tracker.update_task_status(message="No file to upload or file does not exist.")
+            self.update_task_status(message="No file to upload or file does not exist.")
             return
 
         # Define the upload operation as a synchronous function

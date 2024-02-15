@@ -46,12 +46,14 @@ class FileOperationError(Exception):
         self.filename = filename
 
 class AudioToTranscript:
-    temp_directory = './temp_mp3s'
+    directory = './temp_transcripts'
 
     def __init__(self, tracker: FileTranscriptionTracker):
         self.tracker = tracker
 
     async def transcribe(self, input_file: Union[UploadFile, GDriveInput], audio_quality: str = AUDIO_QUALITY_DEFAULT, compute_type: str = COMPUTE_TYPE_DEFAULT):
+        if not os.path.exists(self.directory):
+            os.makedirs(self.directory)
         try:
             temp_file_path = await self._get_verified_mp3_file(input_file)
             return await self._transcribe_mp3_file(temp_file_path, audio_quality, compute_type)
@@ -62,13 +64,13 @@ class AudioToTranscript:
         # Pydantic input validation makes sure we either have a file or a GDrive ID.
         if isinstance(input_file, UploadFile):
             try:
-                file_path = await self._copy_uploaded_file_to_temp_file(self.temp_directory, input_file)
+                file_path = await self._copy_uploaded_file_to_temp_file(self.directory, input_file)
             except Exception as e:
                 error_message = f"{e}"
                 self.tracker.handle_error_message(error_message)
         elif isinstance(input_file, GDriveInput):
             try:
-                file_path = await self._copy_file_with_GDrive_ID_to_temp_file(self.temp_directory, input_file.gdrive_id)
+                file_path = await self._copy_file_with_GDrive_ID_to_temp_file(self.directory, input_file.gdrive_id)
             except Exception as e:
                 error_message = f"{e}"
                 self.tracker.handle_error_message(error_message)
@@ -87,22 +89,33 @@ class AudioToTranscript:
                 device="cuda:0",
                 torch_dtype=torch_compute_type,
             )
+            self.tracker.task_status.transcription_audio_quality = audio_quality
+            self.tracker.task_status.transcription_compute_type = compute_type
             self.tracker.task_status.workflow_status = WorkflowStatus.TRANSCRIBING
             self.tracker.update_task_status()
-            return pipe(
-                file_path, chunk_length_s=30, batch_size=8, return_timestamps=False
+            transcription_dict =  pipe(
+                audio_file, chunk_length_s=30, batch_size=8, return_timestamps=False
             )
+            # Use os.path.basename to get the filename with extension
+            base_name = os.path.basename(audio_file)
+            # Use os.path.splitext to remove the file extension
+            local_file_name = os.path.splitext(base_name)[0]
+            self.tracker.task_status.transcription_gdrive_filename = f"{local_file_name}.txt"
+            self.tracker.task_status.workflow_status = WorkflowStatus.TRANSCRIPTION_COMPLETE
+            self.tracker.update_task_status()
+            local_file_path = os.path.join(self.directory, local_file_name + ".txt")
+            # Use aiofiles to write the transcription text to the local file
+            with open(local_file_path, 'w') as file:
+                file.write(transcription_dict['text'])
+            return local_file_path
         try:
             loop = asyncio.get_running_loop()
-            self.tracker.task_status.workflow_status = WorkflowStatus.TRANSCRIBING
-            await loop.run_in_executor(None, self.tracker.update_task_status)
             # # Process the audio file - This can also be a blocking call
             model_name = AUDIO_QUALITY_DICT[audio_quality]
             torch_compute_type = COMPUTE_TYPE_MAP[compute_type]
-            transcription = await loop.run_in_executor(None, transcribe_with_pipe, file_path, model_name, torch_compute_type)
-            self.tracker.task_status.workflow_status = WorkflowStatus.TRANSCRIPTION_COMPLETE
+            local_file_path = await loop.run_in_executor(None, transcribe_with_pipe, file_path, model_name, torch_compute_type)
             await loop.run_in_executor(None, self.tracker.update_task_status)
-            await self.tracker.upload_to_gdrive(transcription)
+            await self.tracker.upload_to_gdrive(local_file_path)
         except Exception as e:
             self.tracker.task_status.workflow_status = WorkflowStatus.ERROR
             self.tracker.handle_error_message(f"{e}")
