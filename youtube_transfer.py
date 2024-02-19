@@ -2,8 +2,7 @@ import asyncio
 import os
 import re
 from logger_code import LoggerBase
-from file_transcription_tracker import FileTranscriptionTracker
-from workflowstatus_code import WorkflowStatus
+
 # yt_dlp is a fork of youtube-dl that has stayed current with the latest YouTube isms.  Youtube-dl is no longer
 # supported so use yt_dlp.  It is more feature rich and up-to-date.
 import yt_dlp as youtube_dl
@@ -21,9 +20,9 @@ class YouTubeTransfer():
         -1: "Expected MP3 file - {} - not found after download and processing.",
         -2: "Exception occured. Error:{} "
     }
-    def __init__(self, tracker: FileTranscriptionTracker):
+    def __init__(self):
         self.logger = LoggerBase.setup_logger()
-        self.tracker = tracker
+        self.tracker = None #TODO
 
     async def download_youtube_audio(self, youtube_url: str):
         self.tracker.task_status.youtube_url = youtube_url

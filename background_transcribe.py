@@ -7,7 +7,7 @@ import json
 from pydrive2.drive import GoogleDrive
 from shared import setup_logger, login_with_service_account, BASE_URL, LOCAL_MP3_DIRECTORY, MODEL_NAME, COMPUTE_TYPE, GDRIVE_FOLDER_ID, TRANSCRIBE_ENDPOINT
 from file_transcription_tracker import FileTranscriptionTracker
-from workflowstatus_code import WorkflowStatus
+from workflow_states_code import WorkflowStatus
 
 # Initialize logging
 logger = setup_logger()

@@ -3,20 +3,21 @@ import os
 from pydantic import BaseModel
 from fastapi import UploadFile
 from typing import Union
-from file_transcription_tracker import FileTranscriptionTracker
-from transcription_tracker_code import GDriveID
-from workflowstatus_code import WorkflowStatus
+from workflow_status_model import GDriveID
 from transformers import pipeline
 import torch
 import asyncio
+from settings_code import get_settings
+from workflow_tracker_code import WorkflowTracker
+from workflow_states_code import WorkflowStates
+from workflow_error_code import handle_error
+from logger_code import LoggerBase
+from gdrive_helper_code import GDriveHelper
 
 # Assuming the existence of necessary imports and global variables
 
 class GDriveInput(BaseModel):
     gdrive_id: str
-
-AUDIO_QUALITY_DEFAULT = "medium.en"
-COMPUTE_TYPE_DEFAULT = "float16"
 
 AUDIO_QUALITY_DICT = {
     "default":  "openai/whisper-medium.en",
@@ -46,19 +47,23 @@ class FileOperationError(Exception):
         self.filename = filename
 
 class AudioToTranscript:
+    settings = get_settings()
     directory = './temp_transcripts'
 
-    def __init__(self, tracker: FileTranscriptionTracker):
-        self.tracker = tracker
 
-    async def transcribe(self, input_file: Union[UploadFile, GDriveInput], audio_quality: str = AUDIO_QUALITY_DEFAULT, compute_type: str = COMPUTE_TYPE_DEFAULT):
+    def __init__(self):
+        self.tracker = WorkflowTracker()
+        self.logger = LoggerBase.setup_logger()
+        self.gh = GDriveHelper()
+
+    async def transcribe(self, input_file: Union[UploadFile, GDriveInput], audio_quality: str = settings.audio_quality_default, compute_type: str = settings.compute_type_default):
         if not os.path.exists(self.directory):
             os.makedirs(self.directory)
         try:
             temp_file_path = await self._get_verified_mp3_file(input_file)
-            return await self._transcribe_mp3_file(temp_file_path, audio_quality, compute_type)
+            return await self._transcribe_and_upload(temp_file_path, audio_quality, compute_type)
         except Exception as e:
-            raise
+            await handle_error(status=WorkflowStates.TRANSCRIPTION_FAILED, error_message=f"{e}", operation="transcribe")
 
     async def _get_verified_mp3_file(self, input_file: Union[UploadFile, GDriveInput]) -> str:
         # Pydantic input validation makes sure we either have a file or a GDrive ID.
@@ -67,59 +72,104 @@ class AudioToTranscript:
                 file_path = await self._copy_uploaded_file_to_temp_file(self.directory, input_file)
             except Exception as e:
                 error_message = f"{e}"
-                self.tracker.handle_error_message(error_message)
+                await handle_error(error_message=error_message, operation="copy_uploaded_file_to_temp_file")
         elif isinstance(input_file, GDriveInput):
+            self.logger.debug(f"Using GDriveInput. input file: {input_file}")
             try:
-                file_path = await self._copy_file_with_GDrive_ID_to_temp_file(self.directory, input_file.gdrive_id)
+                file_path = await self._copy_mp3file_with_GDrive_ID_to_temp_file(self.directory, input_file.gdrive_id)
             except Exception as e:
                 error_message = f"{e}"
-                self.tracker.handle_error_message(error_message)
-
+                await handle_error(error_message=error_message, operation="copy_mp3file_with_GDrive_ID_to_temp_file")
+        self.logger.debug(f"file_path: {file_path}")
         # Verify if the file is an MP3
         if not file_path.endswith('.mp3'):
-            self.tracker.handle_error_message(f"File {file_path} is not an MP3.")
+            await handle_error(error_message=f"File {file_path} is not an MP3.")
         return file_path
 
-    async def _transcribe_mp3_file(self, file_path: str, audio_quality: str, compute_type: str):
-        def transcribe_with_pipe(audio_file, model_name, torch_compute_type):
-            self.tracker.task_status.workflow_status = WorkflowStatus.LOADING_MODEL
+    async def _transcribe_and_upload(self,audio_file_path, audio_quality, compute_type):
+        from gdrive_helper_code import GDriveHelper
+        self.tracker.workflow_status.transcription_audio_quality = audio_quality
+        self.tracker.workflow_status.transcription_compute_type = compute_type
+        self.logger.debug("in _transcribe_and_upload, starting transcription")
+        transcription_text = await self._pipeline_transcription(audio_file_path, audio_quality, compute_type)
+        self.logger.debug("done transcribing.")
+        # Processing the transcription result
+        base_name = os.path.basename(audio_file_path)
+        local_file_name, _ = os.path.splitext(base_name)
+        local_file_path = os.path.join(self.directory, f"{local_file_name}.txt")
+        self.tracker.workflow_status.transcription_gdrive_filename = local_file_name
+        await self.tracker.update_status()
+        self.logger.debug(f"Transcript at local_file_path: {local_file_path}")
+        await self._save_transcription_to_file(transcription_text, local_file_path)
+        gh = GDriveHelper()
+        gdriveid = self.settings.gdrive_transcripts_folder_id
+        self.tracker.workflow_status.transcription_gdrive_id = gdriveid
+        self.logger.debug(f"Uploading transcript to gdriveid: {gdriveid}")
+        await gh.upload_to_gdrive(folder_GdriveID=gdriveid,file_path=local_file_path)
+        self.logger.debug("Transcript is done uploading.")
+        
+    async def _save_transcription_to_file(self, transcription_text, local_file_path):
+        """
+        Saves the transcription text to a local file asynchronously.
+        """
+        async with aiofiles.open(local_file_path, 'w') as file:
+            await file.write(transcription_text)
+
+    async def _pipeline_transcription(self,audio_file_path: str,audio_quality: str, compute_type: str) -> str:
+        """
+        Asynchronously transcribes an audio file using the Hugging Face pipeline.
+        """
+        loop = asyncio.get_running_loop()
+
+        # Update tracker status asynchronously
+        self.tracker.workflow_status.status = WorkflowStates.LOADING_MODEL
+        await self.tracker.update_status()
+
+        model_name = AUDIO_QUALITY_DICT.get(audio_quality,"openai/whisper-medium.en")
+        compute_float_type = COMPUTE_TYPE_MAP.get(compute_type, torch.float16)
+        self.logger.debug(f"in _pipeline_transcription, compute_float_type: {compute_float_type}, model_name: {model_name}")
+        # Define the function to be executed in the executor
+        def _transcribe_pipeline():
             pipe = pipeline(
                 "automatic-speech-recognition",
                 model=model_name,
-                device="cuda:0",
-                torch_dtype=torch_compute_type,
+                device=0 if torch.cuda.is_available() else -1,  # Adjust based on your CUDA availability
+                torch_dtype=compute_float_type
             )
-            self.tracker.task_status.transcription_audio_quality = audio_quality
-            self.tracker.task_status.transcription_compute_type = compute_type
-            self.tracker.task_status.workflow_status = WorkflowStatus.TRANSCRIBING
-            self.tracker.update_task_status()
-            transcription_dict =  pipe(
-                audio_file, chunk_length_s=30, batch_size=8, return_timestamps=False
-            )
-            # Use os.path.basename to get the filename with extension
-            base_name = os.path.basename(audio_file)
-            # Use os.path.splitext to remove the file extension
-            local_file_name = os.path.splitext(base_name)[0]
-            self.tracker.task_status.transcription_gdrive_filename = f"{local_file_name}.txt"
-            self.tracker.task_status.workflow_status = WorkflowStatus.TRANSCRIPTION_COMPLETE
-            self.tracker.update_task_status()
-            local_file_path = os.path.join(self.directory, local_file_name + ".txt")
-            # Use aiofiles to write the transcription text to the local file
-            with open(local_file_path, 'w') as file:
-                file.write(transcription_dict['text'])
-            return local_file_path
+            return pipe(audio_file_path, chunk_length_s=30, batch_size=8, return_timestamps=False)
+
         try:
-            loop = asyncio.get_running_loop()
-            # # Process the audio file - This can also be a blocking call
+            # Run the synchronous pipeline function in an executor
+            transcription_result = await loop.run_in_executor(None, _transcribe_pipeline)
+            transcription_text = transcription_result['text']
+            self.logger.debug(f"transcription_text: {transcription_text[:50]}")
+            return transcription_text
+        except Exception as e:
+            await handle_error(error_message=f"Transcription failed: {e}")
+    
+
+
+
+    async def _transcribe_mp3_file(self, file_path: str, audio_quality: str, compute_type: str):
+        try:
+            # Prepare model parameters
             model_name = AUDIO_QUALITY_DICT[audio_quality]
             torch_compute_type = COMPUTE_TYPE_MAP[compute_type]
-            local_file_path = await loop.run_in_executor(None, transcribe_with_pipe, file_path, model_name, torch_compute_type)
-            await loop.run_in_executor(None, self.tracker.update_task_status)
-            await self.tracker.upload_to_gdrive(local_file_path)
+            self.tracker.workflow_status.transcription_audio_quality = audio_quality
+            self.tracker.workflow_status.transcription_compute_type = compute_type
+
+            # Transcribe the file
+            local_file_path = await self._transcribe_with_pipe(file_path, model_name, torch_compute_type)
+
+            # Further processing, such as uploading to GDrive, can be done here
+            # Make sure any method called here is properly handling exceptions as well
+
         except Exception as e:
-            self.tracker.task_status.workflow_status = WorkflowStatus.ERROR
-            self.tracker.handle_error_message(f"{e}")
-            raise 
+            # Handle any errors that occurred during transcription or subsequent processing
+            await handle_error(status=WorkflowStates.TRANSCRIPTION_FAILED, error_message=str(e), operation="_transcribe_mp3_file")
+
+
+ 
     async def _copy_uploaded_file_to_temp_file(self, temp_dir: str, file: UploadFile) -> str:
         try:
             temp_file_path = os.path.join(temp_dir, file.filename)
@@ -128,10 +178,13 @@ class AudioToTranscript:
                 await temp_file.write(content)
             return temp_file_path
         except Exception as e:
-            self.tracker.handle_error_message(f"{e}")
+            await handle_error(status=WorkflowStates.TRANSCRIPTION_FAILED, error_message = f"{e}",operation="copy_uploaded_file_to_temp_file")
 
-    async def _copy_file_with_GDrive_ID_to_temp_file(self, temp_dir: str, gdrive_id: GDriveID) -> str:
-        temp_file_path = await self.tracker.download_from_gdrive(gdrive_id, temp_dir)  # Assuming this is an async method
+    async def _copy_mp3file_with_GDrive_ID_to_temp_file(self, temp_dir: str, gdrive_id: GDriveID) -> str:
+        try:
+            temp_file_path = await self.gh.download_from_gdrive(gdrive_id, temp_dir)  # Assuming this is an async method
+        except Exception as e:
+            await handle_error(status=WorkflowStates.TRANSCRIPTION_FAILED, error_message=f"{e}", operation="copy_file_with_GDrive_ID_to_temp_file")
         return temp_file_path
     
 

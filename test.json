@@ -1,14 +1,13 @@
-[
-    {
-        "id": 1,
-        "status": "Pending",
-        "description": "Sample task 1",
-        "url": "https://example.com"
-    },
-    {
-        "id": 2,
-        "status": "Completed",
-        "description": "Sample task 2",
-        "url": "https://example.org"
-    }
-]
+{
+    "task_id": "0739bffd-7197-4710-9df2-23f7f492abd9",
+    "last_modified": "2024-02-18T02:30:23.792103",
+    "workflow_status": null,
+    "mp3_gdrive_id": null,
+    "mp3_gdrive_filename": null,
+    "description": null,
+    "youtube_url": null,
+    "transcription_gdrive_id": null,
+    "transcription_gdrive_filename": null,
+    "transcription_audio_quality": null,
+    "transcription_compute_type": null
+}
