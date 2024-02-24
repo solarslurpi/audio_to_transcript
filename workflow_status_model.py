@@ -20,25 +20,24 @@ class TaskUnit(str, Enum):
     TRANSCRIPTION = 'transcription'
     MONITOR = 'monitor'
 
-class WorkflowStatus(BaseModel):
+class WorkflowStatusModel(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     last_modified: datetime = Field(default_factory=datetime.now)
     status: WorkflowStates = None
     mp3_gdrive_id: str = None
     mp3_gdrive_filename: Optional[str] = None
-    description: Optional[str] = None
+    comment: Optional[str] = None
+    transcript_gdrive_id: str = None
+    transcript_gdrive_filename: Optional[str] = None
+    transcript_audio_quality: Optional[str] = None
+    transcript_compute_type: Optional[str] = None
+    # description: Optional[str] = None
     def dict(self, **kwargs):
         d = super().model_dump(**kwargs)
         d['last_modified'] = self.last_modified.isoformat()
         d['status'] = self.status.name
         return d
 
-class YouTubeDownloadStatus(WorkflowStatus):
+class YouTubeDownloadStatusModel(WorkflowStatusModel):
     youtube_url: Optional[str] = None
 
-
-class TranscriptionStatus(YouTubeDownloadStatus):
-    transcription_gdrive_id: str = None
-    transcription_gdrive_filename: Optional[str] = None
-    transcription_audio_quality: Optional[str] = None
-    transcription_compute_type: Optional[str] = None

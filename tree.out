@@ -1,0 +1,134 @@
+.
+├── CUDA_files
+│   ├── cublas64_11.dll
+│   ├── cublasLt64_11.dll
+│   ├── cudnn_cnn_infer64_8.dll
+│   ├── cudnn_ops_infer64_8.dll
+│   └── zlibwapi.dll
+├── Tim.yml
+├── XO_status_manager_code.py
+├── __init__.py
+├── __pycache__
+│   ├── __init__.cpython-311.pyc
+│   ├── app.cpython-311.pyc
+│   ├── audio_to_transcript.cpython-311.pyc
+│   ├── audio_transcriber_code.cpython-311.pyc
+│   ├── file_tracker_store_code.cpython-311.pyc
+│   ├── gdrive_helper_code.cpython-311.pyc
+│   ├── logger_code.cpython-311.pyc
+│   ├── settings_code.cpython-311.pyc
+│   ├── tracker_store_code.cpython-311.pyc
+│   ├── workflow_error_code.cpython-311.pyc
+│   ├── workflow_monitor_code.cpython-311.pyc
+│   ├── workflow_states_code.cpython-311.pyc
+│   ├── workflow_status_model.cpython-311.pyc
+│   ├── workflow_tracker_code.cpython-311.pyc
+│   └── youtube_transfer.cpython-311.pyc
+├── a.py
+├── app copy.py
+├── app old_newer.py
+├── app.py
+├── app_old.py
+├── appmap.yml
+├── audio_to_transcript copy.py
+├── audio_to_transcript_ui.py
+├── audio_to_transcript_ui_argparse.py
+├── audio_transcriber_code.py
+├── background_audio_transcribe.py
+├── background_transcribe.py
+├── common.py
+├── downloads
+│   └── temp.mp3
+├── file_tracker_store.json
+├── file_tracker_store_code.py
+├── gdrive_helper_code.py
+├── gdrive_monitor_code.py
+├── logger_code.py
+├── monitor.py
+├── requirements.txt
+├── service-account-creds.json
+├── settings_code.py
+├── shared.py
+├── static
+│   ├── 12272.txt
+│   ├── 13398.txt
+│   ├── 15356.txt
+│   ├── 24766.txt
+│   ├── 30625.txt
+│   ├── 30637.txt
+│   ├── 32840.txt
+│   ├── 33000.txt
+│   ├── 36656.txt
+│   ├── 37274.txt
+│   ├── 37984.txt
+│   ├── 41795.txt
+│   ├── 43042.txt
+│   ├── 52809.txt
+│   ├── 55630.txt
+│   ├── 56182.txt
+│   ├── 56394.txt
+│   ├── 56655.txt
+│   ├── 56767.txt
+│   ├── 56850.txt
+│   ├── 57016.txt
+│   ├── 62920.txt
+│   ├── 63170.txt
+│   ├── 63203.txt
+│   ├── 63540.txt
+│   ├── 64915.txt
+│   ├── Joseph_Amsili_How_do_we_know_a_soil_is_healthyand_how_does_it_relate_to_soil_carbon_sequestration_10629_medium_10629.txt
+│   ├── Joseph_Amsili_How_do_we_know_a_soil_is_healthyand_how_does_it_relate_to_soil_carbon_sequestration_42932_medium_42932.txt
+│   ├── Joseph_Amsili_How_do_we_know_a_soil_is_healthyand_how_does_it_relate_to_soil_carbon_sequestration_50043_medium_50043.txt
+│   ├── Joseph_Amsili_How_do_we_know_a_soil_is_healthyand_how_does_it_relate_to_soil_carbon_sequestration_55119_medium_55119.txt
+│   ├── Joseph_Amsili_How_do_we_know_a_soil_is_healthyand_how_does_it_relate_to_soil_carbon_sequestration_55489_medium_55489.txt
+│   ├── MichaelAldeanPatreon_large-v2_28821.txt
+│   ├── MichaelAldeanPatreon_medium_55966.txt
+│   ├── The_Reasoning_Behind_Pruning_37168_medium_37168.txt
+│   ├── The_Reasoning_Behind_Pruning_37375_medium_37375.txt
+│   ├── The_Reasoning_Behind_Pruning_38232_medium_38232.txt
+│   ├── fp16-base.txt
+│   ├── test_large-v2_28726.txt
+│   └── test_medium_28558.txt
+├── t_youtube_download.py
+├── task_status.json
+├── task_statuses.json
+├── temp_files
+│   ├── 08627_temp.webm.part
+│   ├── 09744_temp.webm.part
+│   ├── 10573_temp.webm.part
+│   ├── 52896_temp.mp3
+│   ├── 52896_temp.webm
+│   ├── 53030_temp.webm.part
+│   ├── 55833_temp.webm.part
+│   ├── 56518_temp.webm.part
+│   ├── Joseph_Amsili_How_do_we_know_a_soil_is_healthyand_how_does_it_relate_to_soil_carbon_sequestration_10081.mp3
+│   └── Joseph_Amsili_How_do_we_know_a_soil_is_healthyand_how_does_it_relate_to_soil_carbon_sequestration_51975.mp3
+├── temp_mp3s
+│   └── The Reasoning Behind Pruning.mp3
+├── temp_transcripts
+│   ├── Entomologist Suzanne Wainwright Evans discusses thrips management for indoor gardens..mp3
+│   ├── Episode 125： The Latest in Biocontrols with Suzanne Wainwright Evans.mp3
+│   ├── The Importance of Calcium in Cannabis with Bryant Mason (Soil Doctor).mp3
+│   └── The Reasoning Behind Pruning.mp3
+├── test
+│   ├── __init__.py
+│   ├── __pycache__
+│   ├── test_app.py
+│   ├── test_example.py
+│   ├── test_transcribe.py
+│   └── test_transcribe_endpoint.py
+├── test.json
+├── test.py
+├── test1.py
+├── tracker_store_code.py
+├── tree.out
+├── utilities.py
+├── workflow_error_code.py
+├── workflow_monitor_code.py
+├── workflow_states_code.py
+├── workflow_status_model.py
+├── workflow_tracker_code.py
+├── youtube_transfer.py
+└── yt-dlp.exe
+
+9 directories, 122 files

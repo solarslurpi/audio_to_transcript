@@ -1,4 +1,5 @@
-appmap_dir: tmp/appmap
+appmap_dir: tmp\appmap
 language: python
 name: audio_to_transcript
-packages: []
+packages:
+- path: test

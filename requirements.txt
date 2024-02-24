@@ -34,7 +34,7 @@ pydantic==2.5.2
 pydantic_core==2.14.5
 pypdfium2==4.25.0
 pyreadline3==3.4.1
-pytest==8.0.0
+pytest==8.0.1
 python-dateutil==2.8.2
 python-multipart==0.0.6
 pytz==2023.3.post1

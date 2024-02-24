@@ -5,14 +5,14 @@ from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 import uvicorn
 import os
-from audio_to_transcript import AudioToTranscript, AUDIO_QUALITY_DICT, COMPUTE_TYPE_MAP
+from audio_transcriber_code import AudioTranscriber, AUDIO_QUALITY_DICT, COMPUTE_TYPE_MAP
 from youtube_transfer import YouTubeTransfer
 from logger_code import LoggerBase
 from workflow_tracker_code import WorkflowTracker
-from audio_to_transcript import GDriveInput
+from audio_transcriber_code import GDriveInput
 from settings_code import Settings, get_settings
-from gdrive_helper_code import GDriveHelper
-from workflow_monitor_code import WorkflowMonitor
+# from gdrive_helper_code import GDriveHelper
+# from workflow_monitor_code import WorkflowMonitor
 
 logger = LoggerBase.setup_logger()
 
@@ -79,7 +79,7 @@ async def transcribe_mp3(
     compute_type: Optional[str] = Form(Settings().compute_type_default),
 ):
     try:
-        background_tasks.add_task(AudioToTranscript().transcribe, input_file, audio_quality, compute_type)
+        background_tasks.add_task(AudioTranscriber().transcribe, input_file, audio_quality, compute_type)
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error in processing the request: {e}")
@@ -132,49 +132,49 @@ async def _perform_task(background_tasks: BackgroundTasks, task_func, *args, **k
             detail=f"An error occurred at state '{state}': {e}"
         )
 
-@app.post("/monitor/start")
-async def monitor_start(
-    background_tasks: BackgroundTasks, 
-    gdrive_id_mp3: Optional[str] = Form(None),  # Marked as explicitly optional
-    gdrive_id_transcripts: Optional[str] = Form(None),  # Marked as explicitly optional
-    monitoring_frequency: Optional[int] = Form(None),  # Marked as explicitly optional
-    settings: Settings = Depends(get_settings)  # Get settings instance
-):
-    # Use provided form data or fall back to settings if the form field is None
-    logger.debug("Starting code in monitor_start")
-    gdrive_id_mp3 = gdrive_id_mp3 if gdrive_id_mp3 is not None else settings.gdrive_mp3_folder_id
-    gdrive_id_transcripts = gdrive_id_transcripts if gdrive_id_transcripts is not None else settings.gdrive_transcripts_folder_id
-    monitoring_frequency = monitoring_frequency if monitoring_frequency is not None else settings.monitor_frequency_in_secs
-    ##################################
-    # vaidate access to GDrive folders
-    ##################################
-    try:
-        gdrive_helper = GDriveHelper()
-        if not await gdrive_helper.validate_gdrive_access(gdrive_id_mp3) or not await gdrive_helper.validate_gdrive_access(gdrive_id_transcripts):
-            raise HTTPException(status_code=400, detail="One or more GDrive folders are not accessible.")
-    except Exception as e:
-        logger.error(f"Error in validating access to GDrive folders: {e}")
-        raise HTTPException(status_code=400, detail=f"Error in validating access to GDrive folders: {e}")
-    logger.debug("Completed code in validating access to GDrive folers.")
-    ##################################
-    # manage_transcription_workflow
-    ##################################  
-    try:
-        monitor = WorkflowMonitor()
-        logger.debug("Starting code in manage_transcription_workflow")
-        await monitor.manage_transcription_workflow()
-        logger.debug("Completed code in manage_transcription_workflow")
-    except Exception as e:
-        logger.error(f"Error in call to manage_transcription_workflow: {e}")
-        raise HTTPException(status_code=400, detail=f"Error in call to manage_transcription_workflow:  {e}")
+# @app.post("/monitor/start")
+# async def monitor_start(
+#     background_tasks: BackgroundTasks, 
+#     gdrive_id_mp3: Optional[str] = Form(None),  # Marked as explicitly optional
+#     gdrive_id_transcripts: Optional[str] = Form(None),  # Marked as explicitly optional
+#     monitoring_frequency: Optional[int] = Form(None),  # Marked as explicitly optional
+#     settings: Settings = Depends(get_settings)  # Get settings instance
+# ):
+#     # Use provided form data or fall back to settings if the form field is None
+#     logger.debug("Starting code in monitor_start")
+#     gdrive_id_mp3 = gdrive_id_mp3 if gdrive_id_mp3 is not None else settings.gdrive_mp3_folder_id
+#     gdrive_id_transcripts = gdrive_id_transcripts if gdrive_id_transcripts is not None else settings.gdrive_transcripts_folder_id
+#     monitoring_frequency = monitoring_frequency if monitoring_frequency is not None else settings.monitor_frequency_in_secs
+#     ##################################
+#     # vaidate access to GDrive folders
+#     ##################################
+#     try:
+#         gdrive_helper = GDriveHelper()
+#         if not await gdrive_helper.validate_gdrive_access(gdrive_id_mp3) or not await gdrive_helper.validate_gdrive_access(gdrive_id_transcripts):
+#             raise HTTPException(status_code=400, detail="One or more GDrive folders are not accessible.")
+#     except Exception as e:
+#         logger.error(f"Error in validating access to GDrive folders: {e}")
+#         raise HTTPException(status_code=400, detail=f"Error in validating access to GDrive folders: {e}")
+#     logger.debug("Completed code in validating access to GDrive folers.")
+#     ##################################
+#     # manage_transcription_workflow
+#     ##################################  
+#     try:
+#         monitor = WorkflowMonitor()
+#         logger.debug("Starting code in manage_transcription_workflow")
+#         await monitor.manage_transcription_workflow()
+#         logger.debug("Completed code in manage_transcription_workflow")
+#     except Exception as e:
+#         logger.error(f"Error in call to manage_transcription_workflow: {e}")
+#         raise HTTPException(status_code=400, detail=f"Error in call to manage_transcription_workflow:  {e}")
 
-    # Logic to schedule or initiate the monitoring task
-    return {
-        "message": "Monitoring started",
-        "GDrive MP3 Folder ID": gdrive_id_mp3,
-        "GDrive Transcripts Folder ID": gdrive_id_transcripts,
-        "Monitoring Frequency": monitoring_frequency
-    }
+#     # Logic to schedule or initiate the monitoring task
+#     return {
+#         "message": "Monitoring started",
+#         "GDrive MP3 Folder ID": gdrive_id_mp3,
+#         "GDrive Transcripts Folder ID": gdrive_id_transcripts,
+#         "Monitoring Frequency": monitoring_frequency
+#     }
 
 
 if __name__ == "__main__":

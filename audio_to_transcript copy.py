@@ -96,18 +96,17 @@ class AudioToTranscript:
         # Processing the transcription result
         base_name = os.path.basename(audio_file_path)
         local_file_name, _ = os.path.splitext(base_name)
-        local_file_path = os.path.join(self.directory, f"{local_file_name}.txt")
         self.tracker.workflow_status.transcription_gdrive_filename = local_file_name
-        await self.tracker.update_status()
+        local_file_path = os.path.join(self.directory, f"{local_file_name}.txt")
         self.logger.debug(f"Transcript at local_file_path: {local_file_path}")
         await self._save_transcription_to_file(transcription_text, local_file_path)
         gh = GDriveHelper()
-        gdriveid = self.settings.gdrive_transcripts_folder_id
-        self.tracker.workflow_status.transcription_gdrive_id = gdriveid
-        self.logger.debug(f"Uploading transcript to gdriveid: {gdriveid}")
-        await gh.upload_to_gdrive(folder_GdriveID=gdriveid,file_path=local_file_path)
+        self.logger.debug("Starting transcript upload.")
+        transcript_folder_gdriveID = self.settings.gdrive_transcripts_folder_id
+        self.tracker.workflow_status.transcription_gdrive_id = await gh.upload_to_gdrive(folder_GdriveID=transcript_folder_gdriveID,file_path=local_file_path)
         self.logger.debug("Transcript is done uploading.")
-        
+        await self.tracker.update_status()
+ 
     async def _save_transcription_to_file(self, transcription_text, local_file_path):
         """
         Saves the transcription text to a local file asynchronously.
