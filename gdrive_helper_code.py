@@ -110,7 +110,7 @@ class GDriveHelper:
     async def upload_mp3_to_gdrive(self, mp3_file_path:Path):
         folder_gdrive_id = self.settings.gdrive_mp3_folder_id
         # Returns the gfile id of the mp3 file.
-        return self.upload(folder_gdrive_id, mp3_file_path)
+        return await self.upload(folder_gdrive_id, mp3_file_path)
     
     async def upload_transcript_to_gdrive(self, transcript_text: str):
         try:
@@ -265,4 +265,3 @@ class GDriveHelper:
             
 
             
-

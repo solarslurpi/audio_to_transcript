@@ -55,51 +55,53 @@ class AudioTranscriber:
             await self.tracker.update_status(state=WorkflowStates.TRANSCRIPTION_COMPLETE, comment='Your comment here', store=True)
             return transcription_text
         except Exception as e:
-            raise
+            await self.tracker.handle_error(status=WorkflowStates.ERROR,error_message=f'Transcription failed. Error: {e}',operation='AudioTranscriber.Transcrbe', store=False,raise_exception=True)
 
     async def _verify_and_prepare_mp3(self, input_file: Union[UploadFile, GDriveInput]) -> Path:
         try:
             # Each of the methods will return an exception if the method isn't successful because if an mp3 file can't be processed, it can't be transcribed. Workflow can't continue.
             self.logger.debug("FLOW: Get mp3 files reading for transcription (_verify_and_prepare_mp3)")
-            local_mp3_filepath,mp3_gfile_id = await self._copy_UploadFile_or_gfile_to_local(input_file)
+            mp3_gfile_id, local_mp3_filepath = await self._copy_UploadFile_or_gfile_to_local(input_file)
             # We want to set these two fields as soon as possible since they are used to track the status of the workflow (through the mp3 gfile's metadata)
             self.tracker.mp3_gfile_id = mp3_gfile_id
             self.tracker.mp3_gfile_name = local_mp3_filepath.name
+            self.logger.debug(f"FLOW: Set the tracker properties...Tracker mp3_gfile_id: {self.tracker.mp3_gfile_id} mp3 filename: {self.tracker.mp3_gfile_name}")
             return local_mp3_filepath
-        except Exception:
-            raise
+        except Exception as e:
+            await self.tracker.handle_error(status=WorkflowStates.ERROR,error_message=f'Failed to prepare the mp3.  Error: {e}',operation='AudioTranscriber._verify_and_prepare_mp3', store=False,raise_exception=True)
       
     async def _copy_UploadFile_or_gfile_to_local(self, input_file: Union[UploadFile, GDriveInput]):
 
            
-        async def _copy_UploadFile_to_local_and_get_gdrive_id(local_dir):
+        async def _copy_UploadFile_to_local_and_get_gdrive_id(local_dir:str) -> tuple:
             try:
-                local_mp3_file_path = local_dir / input_file.filename
+                local_mp3_file_path = Path(local_dir) / input_file.filename
                 async with aiofiles.open(str(local_mp3_file_path), "wb") as temp_file:
                     content = await input_file.read()
                     await temp_file.write(content)
                 # We also need to upload to the mp3 gdrive so that we have tracking.
                 mp3_gfile_id = await self.gh.upload_mp3_to_gdrive(local_mp3_file_path)
-                return local_mp3_file_path, mp3_gfile_id
+                return mp3_gfile_id, local_mp3_file_path
             except Exception as e:
-                await self.tracker.handle_error(status=WorkflowStates.ERROR,error_message='could not create a local copy of the mp3 file with UploadFile as the source.',operation='_copy_UploadFile_to_local_and_get_gdrive_id',store=False, raise_exception=True)
+                await self.tracker.handle_error(status=WorkflowStates.ERROR,error_message=f'could not create a local copy of the mp3 file with UploadFile as the source. Error: {e}',operation='AudioTranscriber._copy_UploadFile_to_local_and_get_gdrive_id',store=False, raise_exception=True)
                 
         async def _copy_gfile_to_local(local_dir):
             try:
                 local_file_path = await self.gh.download_from_gdrive(input_file.gdrive_id, local_dir) 
                 return local_file_path
             except Exception as e:
-                await self.tracker.handle_error(status=WorkflowStates.ERROR,error_message='could not create a local copy of the mp3 file with GDriveInput as the source.',operation='_copy_UploadFile_mp3_to_local',store=False, raise_exception=True)
+                await self.tracker.handle_error(status=WorkflowStates.ERROR,error_message=f'could not create a local copy of the mp3 file with GDriveInput as the source. Error: {e}',operation='AudioTranscriber._copy_UploadFile_mp3_to_local',store=False, raise_exception=True)
         local_dir = self.settings.local_mp3_dir
         if isinstance(input_file, UploadFile):
             # Directly call the nested function with the input_file
-            local_mp3_file_path = await _copy_UploadFile_to_local_and_get_gdrive_id(local_dir)
+            local_mp3_gfile_id, local_mp3_file_path = await _copy_UploadFile_to_local_and_get_gdrive_id(local_dir)
         elif isinstance(input_file, GDriveInput):
             # Set up tracking
-            self.tracker.mp3_gfile_id = input_file.gdrive_id
             local_mp3_file_path = await _copy_gfile_to_local(local_dir)
-        self.logger.debug(f"Local file path is {local_mp3_file_path}")
-        return local_mp3_file_path, input_file.gdrive_id
+            local_mp3_gfile_id = input_file.gdrive_id
+        self.logger.debug(f"Local file path is {local_mp3_file_path} gfile_id is {local_mp3_gfile_id}")
+
+        return local_mp3_gfile_id, local_mp3_file_path
  
     async def _transcribe_mp3(self, audio_file_path: Path, audio_quality: str, compute_type: str) -> str:
         """
@@ -117,7 +119,7 @@ class AudioTranscriber:
                 await self.tracker.handle_error(
                     status=WorkflowStates.TRANSCRIPTION_FAILED, 
                     error_message=f"Audio file does not exist or is not a file: {audio_file_path}",
-                    operation="_transcribe_mp3", 
+                    operation="AudioTranscriber._transcribe_mp3", 
                     store=True,
                     raise_exception=True
                 )
@@ -160,7 +162,7 @@ class AudioTranscriber:
             await self.tracker.handle_error(
                 status=WorkflowStates.TRANSCRIPTION_FAILED, 
                 error_message=f"{e}",
-                operation="_transcribe_mp3", 
+                operation="AudioTranscriber._transcribe_mp3", 
                 store=True,
                 raise_exception=True
             )
@@ -184,5 +186,5 @@ class AudioTranscriber:
         try:
             await self.gh.upload_transcript_to_gdrive(transcript_text)
         except Exception as e:
-            await self.tracker.handle_error(status=WorkflowStates.TRANSCRIPTION_FAILED,error_message=f'{e}',operation='upload_transcript', store=True,raise_exception=True)
+            await self.tracker.handle_error(status=WorkflowStates.TRANSCRIPTION_FAILED,error_message=f'{e}',operation='AudioTranscriber.upload_transcript', store=True,raise_exception=True)
     

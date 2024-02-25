@@ -134,7 +134,7 @@ class WorkflowTracker:
             )
             # Assuming `update_transcription_gfile` is an async method within `GDriveHelper`
             gh =  GDriveHelper()
-            self.logger.debug(f"Flow: Updating transcription status on the gfile: {gfile_id}")
+            self.logger.debug(f"Flow: Updating transcription status on the gfile id: {gfile_id}")
             await gh.update_transcription_status_in_gfile(gfile_id, transcription_info_dict)
             self.logger.info("Transcription info stored successfully.")
         except Exception as e:
