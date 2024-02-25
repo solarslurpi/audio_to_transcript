@@ -15,7 +15,7 @@ class WorkflowTracker:
     """
     _instance = None
     _lock = Lock()
-    logger = LoggerBase.setup_logger('WorkflowTracker')
+
 
     @classmethod
     # Always ask for the singleton with get_instance.
@@ -34,7 +34,28 @@ class WorkflowTracker:
             self.workflow_status_model = WorkflowStatusModel()
             self.initialized = True
             self.event_tracker = asyncio.Event()
+            self.logger = LoggerBase.setup_logger('WorkflowTracker')
+            self._mp3_gfile_id = None
+            self._mp3_gfile_name = None
 
+    @property
+    def mp3_gfile_id(self):
+        return self._mp3_gfile_id
+
+    # Property decorator for setter
+    @mp3_gfile_id.setter
+    def mp3_gfile_id(self, value):
+        self._mp3_gfile_id = value
+
+    
+    @property
+    def mp3_gfile_name(self):
+        return self._mp3_gfile_name
+
+    # Property decorator for setter
+    @mp3_gfile_name.setter
+    def mp3_gfile_name(self, value):
+        self._mp3_gfile_name = value
 
     def make_status_dict(self, id: str, state: str, comment: Optional[str] = None):
         return {
@@ -43,7 +64,13 @@ class WorkflowTracker:
             "state": state
         }
 
-    async def update_status(self, state: Enum = None, comment: Optional[str] = None, transcript_gdriveid: Optional[str] = None, store: bool = False):
+    async def update_status(
+    self, 
+    state: Enum = None, 
+    comment: Optional[str] = None, 
+    transcript_gdriveid: Optional[str] = None, 
+    store: Optional[bool] = None,
+):
         async def _validate_state():
             if not isinstance(state, WorkflowStates):
                 return False
@@ -59,14 +86,16 @@ class WorkflowTracker:
         self.workflow_status_model.comment = comment
         self.workflow_status_model.transcript_gdrive_id = transcript_gdriveid
 
-
         if store:
+            if not self._mp3_gfile_id:
+                await self.handle_error(status=WorkflowStates.ERROR,error_message='Option was to store the status. However, the mp3_file_id property is not set.',operation="update_status")
             try:
-                await self._update_transcription_status_in_mp3_gfile()
+                await self._update_transcription_status_in_mp3_gfile(self._mp3_gfile_id)
             except Exception as e:
+                err_msg = f"Could not update the mp3 gfile's metadata.  Error: {e}"
                 await self.handle_error(
                 status=WorkflowStates.TRANSCRIPTION_FAILED, 
-                error_message=f"Could not update the mp3 gfile's metadata.  Error: {e}",
+                error_message=err_msg,
                 operation="update_status", 
                 store=False,
                 raise_exception=False,
@@ -78,6 +107,7 @@ class WorkflowTracker:
         # Default to WorkflowStates.ERROR if no status is provided
         error_status = WorkflowStates.ERROR if not status else status
         detailed_error_message = f"Error during {operation}: {error_message}" if operation else error_message
+        self.logger.error(detailed_error_message)
         if update_status:
             await self.update_status(state=error_status, comment=detailed_error_message,store=store)
         # If raise_exception is True, raise a custom exception after logging and updating the status
@@ -93,8 +123,9 @@ class WorkflowTracker:
         pass
 
 
-    async def _update_transcription_status_in_mp3_gfile(self):
-        from gdrive_helper_code import GDriveHelper  # Adjust this import as necessary
+    async def _update_transcription_status_in_mp3_gfile(self,gfile_id:str):
+        from gdrive_helper_code import GDriveHelper  
+        
         try:
             transcription_info_dict = self.make_status_dict(
                 id=self.workflow_status_model.transcript_gdrive_id or '',
@@ -103,7 +134,8 @@ class WorkflowTracker:
             )
             # Assuming `update_transcription_gfile` is an async method within `GDriveHelper`
             gh =  GDriveHelper()
-            await gh.update_transcription_status_in_gfile(self.workflow_status_model.mp3_gdrive_id, transcription_info_dict)
+            self.logger.debug(f"Flow: Updating transcription status on the gfile: {gfile_id}")
+            await gh.update_transcription_status_in_gfile(gfile_id, transcription_info_dict)
             self.logger.info("Transcription info stored successfully.")
         except Exception as e:
             error_msg = f"Failed to store transcription info: {e}"

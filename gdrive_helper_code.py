@@ -1,16 +1,16 @@
 # gdrive_manager.py
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
-import os
 from pathlib import Path
 from workflow_states_code import WorkflowStates
 from workflow_tracker_code import WorkflowTracker
-from settings_code import get_settings
+from env_settings_code import get_settings
 from logger_code import LoggerBase
 import asyncio
 import json
 from googleapiclient.errors import HttpError
 from typing import Optional
+import aiofiles
 
 
 class GDriveError(Exception):
@@ -42,6 +42,7 @@ class GDriveHelper:
         self.gauth = self._login_with_service_account()
         self.drive = GoogleDrive(self.gauth)
         self.tracker = WorkflowTracker.get_instance()
+        self.settings = get_settings()
 
 
     def _login_with_service_account(self):
@@ -62,6 +63,7 @@ class GDriveHelper:
             raise Exception(f"Authentication failed: {e}") from e
 
     async def check_gdrive_file_exists(self, gfile_id: str) -> bool:
+        self.logger.debug("FLOW: In Check GDrive File Exists (check_gdrive_file_exists)")
         async def do_error(err_msg):
             await self.tracker.handle_error(
                 status=WorkflowStates.TRANSCRIPTION_FAILED, 
@@ -80,14 +82,6 @@ class GDriveHelper:
                 return False
             else:
                 await do_error(f"An error occurred: {error}")
-
-    async def get_filename(self,gfile_id:str) -> Optional[str]:
-        try:
-            file = self.drive.CreateFile({'id': gfile_id})
-            file.FetchMetadata()
-            return file['title']
-        except Exception as e:
-            return ''
 
     def create_gdrive_file(self, folder_id: str, filename='not specified', mimeType='text/plain'):
         file_metadata = {
@@ -113,70 +107,89 @@ class GDriveHelper:
             self.logger.error(f"Error deleting Google Drive file: {e}")
             raise GDriveFileOperationError(operation='delete', detail=file_id, system_error=e)
 
-    async def upload_to_gdrive(self, folder_GdriveID: str, file_path: str):
-            '''
-            
-            args:
-                folder_GdriveID represents the Google Drive ID for the folder where the
-                file will be uploaded to. For example, if the code is uploading the
-                transcript file, the folder_GdriveID is the GDrive ID of the Transcription folder.
-            
-            '''
-            loop = asyncio.get_running_loop()
-            
-            def _upload():
-                try:
-                    gfile = self.drive.CreateFile({'parents': [{'id': folder_GdriveID}]})
-                    gfile.SetContentFile(file_path)
-                    gfile.Upload()
-                    if hasattr(gfile, 'content') and gfile.content:
-                        gfile.content.close()
-                    os.remove(file_path)  # Optionally remove the local file after upload
-                except Exception as e:
-                    self.logger.error(f"Error uploading file to Google Drive: {e}")
-                    raise GDriveFileOperationError(operation='upload', detail=file_path, system_error=e)
-                return gfile['id']
-            # Run the synchronous upload function in an executor
-            self.tracker.work_flow_status.transcription_file_id = await loop.run_in_executor(None, _upload)
-
+    async def upload_mp3_to_gdrive(self, mp3_file_path:Path):
+        folder_gdrive_id = self.settings.gdrive_mp3_folder_id
+        # Returns the gfile id of the mp3 file.
+        return self.upload(folder_gdrive_id, mp3_file_path)
+    
+    async def upload_transcript_to_gdrive(self, transcript_text: str):
+        try:
+            mp3_filename = self.tracker.mp3_gfile_name
+            if not mp3_filename:
+                await self.tracker.handle_error(status=WorkflowStates.TRANSCRIPTION_FAILED,error_message="The mp3 filename is None, which means we don't have a name for our transcription document.", operation='upload_transcript_to_gdrive', store=True,raise_exception=True)
+            if mp3_filename.endswith('.mp3'):
+                txt_filename = mp3_filename[:-4] + '.txt'
+            local_transcript_dir = Path(self.settings.local_transcript_dir)
+            local_transcript_file_path = local_transcript_dir / txt_filename
+            async with aiofiles.open(str(local_transcript_file_path), "w") as temp_file:
+                await temp_file.write(transcript_text)
+            folder_gdrive_id = self.settings.gdrive_transcripts_folder_id
+            # returns the gfile id of the transcription file.
+            transcription_gfile_id = await self.upload(folder_gdrive_id,local_transcript_file_path)
+            await self.tracker.update_status(state=WorkflowStates.TRANSCRIPTION_UPLOAD_COMPLETE, comment='Adding the transcription gfile tracker id', transcript_gdriveid= transcription_gfile_id, store=True)
+        except Exception as e:
+            await self.tracker.handle_error(status=WorkflowStates.TRANSCRIPTION_FAILED,error_message=f'Something is not right when trying to upload the transcript...{e}.',operation='GDriveHelper.upload_transcript_to_gdrive', store=True,raise_exception=True)
+    
+    async def upload(self, folder_gdrive_id:str, file_path: Path):
+        try:
+            gfile = self.drive.CreateFile({'parents': [{'id': folder_gdrive_id}]})
+            gfile.SetContentFile(str(file_path))
+            gfile.Upload()
+            if hasattr(gfile, 'content') and gfile.content:
+                gfile.content.close()
+            #  TODO: Can remove the local transcript...
+        except Exception as e:
+            err_msg = f"Could not upload the file {file_path.name} to GDrive folder ID: {folder_gdrive_id}. {e}",
+            await self.tracker.handle_error(status=WorkflowStates.ERROR,error_message=err_msg,operation="upload",raise_exception=True)
+        return gfile['id']
 
     async def download_from_gdrive(self, file_id: str, dir: str):
+        self.logger.debug("FLOW: Download from GDrive (download_from_GDrive)")
         loop = asyncio.get_running_loop()
         def _download():
             try:
                 gfile = self.drive.CreateFile({'id': file_id})
                 gfile.FetchMetadata(fields="title")
                 filename = gfile['title']
-                destination_path = Path(dir) / filename 
-                gfile.GetContentFile(str(destination_path))  # Downloads the file
+                local_file_path = Path(dir) / filename 
+                gfile.GetContentFile(str(local_file_path))  # Downloads the file
             except Exception as e:
-                self.logger.error(f"Error downloading file from Google Drive: {e}")
-                raise GDriveFileOperationError(operation='download', detail=file_id, system_error=e)
-            return destination_path
-        destination_path = await loop.run_in_executor(None, _download)
-        return destination_path            
+                raise e              
+            return local_file_path
+        try:
+            local_file_path = await loop.run_in_executor(None, _download)
+            return local_file_path 
+        except Exception as e:
+            await self.tracker.handle_error(status=WorkflowStates.ERROR,error_message='f{e}',operation='download_from_gdrive', store=False,raise_exception=True)
+                  
         
 
     async def update_transcription_status_in_gfile(self, gfile_id: str, transcription_info_dict:dict):
-        loop = asyncio.get_running_loop()
-        async def _update_transcription_gfile():
-            try:
-                file_to_update = self.drive.CreateFile({'id': gfile_id})
-                # Take dictionary and make a json string with json.dumps()
-                transcription_info_json = json.dumps(transcription_info_dict)
-                # The transcription (workflow) status is placed as a json string within the gfile's description field.
-                # This is not ideal, but using labels proved to be way too difficult?
-                file_to_update['description'] = transcription_info_json
-            except Exception as e:
-                await self.tracker.handle_error(
-                    status=WorkflowStates.ERROR, 
-                    error_message=f"Could not update the transcription status on the gfile_id: {gfile_id}",
-                    operation="update_transcription_status_in_gfile", 
-                    store=False,
-                    raise_exception=True
-                )
-            file_to_update.Upload()
-        await loop.run_in_executor(None, _update_transcription_gfile)
+        try:
+            file_to_update = self.drive.CreateFile({'id': gfile_id})
+            # Take dictionary and make a json string with json.dumps()
+            transcription_info_json = json.dumps(transcription_info_dict)
+            # The transcription (workflow) status is placed as a json string within the gfile's description field.
+            # This is not ideal, but using labels proved to be way too difficult?
+            file_to_update['description'] = transcription_info_json
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, file_to_update.Upload)
+            updated_file = self.drive.CreateFile({'id': gfile_id})
+            updated_file.FetchMetadata(fields='description')
+            return updated_file['description']
+
+        except Exception as e:
+            err_msg = f"Could not update the transcription status on the gfile_id: {gfile_id}",
+            self.logger.error(err_msg),
+            await self.tracker.handle_error(
+
+                status=WorkflowStates.ERROR, 
+                error_message=err_msg,
+                operation="update_transcription_status_in_gfile", 
+                store=False,
+                raise_exception=True
+            )
+            
     
     async def list_files_to_transcribe(self, gdrive_folder_id: str) -> list:
         loop = asyncio.get_running_loop()
@@ -205,31 +218,51 @@ class GDriveHelper:
         except Exception as e:
             self.logger.error(f"Error listing files in folder {gdrive_folder_id}: {e}")
             raise GDriveFileOperationError(operation='list_files', detail=gdrive_folder_id, system_error=str(e))
-
-# Ensure get_gfile_state and other functions called within _get_file_info are defined asynchronously.
-
-        # def _get_filename():
-        #     try:
-        #         # Create a GoogleDriveFile instance with the provided file ID
-        #         file = self.drive.CreateFile({'id': gdrive_id})
-        #         # Fetch metadata for the file
-        #         file.FetchMetadata(fields='title')
-        #         # The title field contains the filename
-        #         filename = file['title']
-        #         return filename
-        #     except Exception as e:
-        #         self.logger.error(f"Error retrieving file metadata for file ID {gdrive_id}: {e}")
-        #         raise GDriveFileOperationError(operation='retrieving filename', detail=f"could not retrieve the title (filename) metadata from the gdrive id: {gdrive_id}", system_error=e)
-        #         # Run the synchronous upload function in an executor
-        # filename = await loop.run_in_executor(None, _get_filename)
-        # return filename
     
-    async def validate_gdrive_access(self, folder_id:str) -> bool:
+    async def get_filename(self,gfile_id:str) -> str:
+        loop = asyncio.get_running_loop()
+        def _get_filename():
+            try:
+                file = self.drive.CreateFile({'id': gfile_id})
+                # Fetch the filename from the metadata
+                file.FetchMetadata(fields='title')
+                filename = file['title']
+                return filename
+            except Exception as e:
+                raise e
         try:
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, lambda: self.drive.ListFile({'q': f"'{folder_id}' in parents and trashed=false", 'maxResults': 1}).GetList())
-            return True
+            filename = await loop.run_in_executor(None, _get_filename)
         except Exception as e:
-            raise GDriveFileOperationError(operation='validate', detail=folder_id, system_error=e)
+            err_msg = f"Error retrieving file metadata for file ID {gfile_id}: {e}"
+            await self.tracker.handle_error(
+                status=WorkflowStates.ERROR, 
+                error_message=err_msg,
+                operation="GDriveHelper.get_filename", 
+                store=False,
+                raise_exception=True
+            )            
+            return filename
+        
+    async def fetch_transcription_status_dict(self,gfile_id:str):
+        loop = asyncio.get_running_loop()
+        def _fetch_transcription_status_dict():
+            try:
+                gfile = self.drive.CreateFile({'id': gfile_id})
+                gfile.FetchMetadata(fields="description")
+                transcription_status_json = gfile['description']
+                if transcription_status_json:
+                    return json.loads(transcription_status_json)
+                else:
+                    return None
+            except Exception as e:
+                raise e
+        try:
+            transcription_status_json = await loop.run_in_executor(None, _fetch_transcription_status_dict)  
+            self.logger.debug(f"The transcription status dict is {transcription_status_json} given gfile_id: {gfile_id}")       
+            return transcription_status_json
+        except Exception as e:
+            await self.tracker.handle_error(status=WorkflowStates.ERROR,error_message=f'Could not fetch the transcription status from the description field of the gfile: {gfile_id}. Error: {e}',  operation='GDriveHelper.fetch_transcription_status_dict', store=False,raise_exception=True)
+            
+
             
 

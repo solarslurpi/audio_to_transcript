@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 from uuid import uuid4
-from settings_code import get_settings
+from env_settings_code import get_settings
 from dotenv import load_dotenv
 from enum import Enum
 from workflow_states_code import WorkflowStates

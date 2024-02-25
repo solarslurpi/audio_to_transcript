@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     google_service_account_credentials_path: str 
     google_drive_oauth_scopes: List[str]
     transcription_url: str
+    local_mp3_dir: str
+    local_transcript_dir: str
     
     @field_validator('google_drive_oauth_scopes')
     @classmethod

@@ -5,7 +5,7 @@ from io import BytesIO
 from pathlib import Path
 from fastapi import UploadFile
 from gdrive_helper_code import GDriveHelper
-from settings_code import get_settings
+from env_settings_code import get_settings
 
 @pytest.fixture
 def mp3_test_path():

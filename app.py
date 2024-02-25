@@ -10,7 +10,7 @@ from youtube_transfer import YouTubeTransfer
 from logger_code import LoggerBase
 from workflow_tracker_code import WorkflowTracker
 from audio_transcriber_code import GDriveInput
-from settings_code import Settings, get_settings
+from env_settings_code import Settings, get_settings
 # from gdrive_helper_code import GDriveHelper
 # from workflow_monitor_code import WorkflowMonitor
 

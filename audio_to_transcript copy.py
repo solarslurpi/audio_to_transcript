@@ -103,9 +103,9 @@ class AudioToTranscript:
         gh = GDriveHelper()
         self.logger.debug("Starting transcript upload.")
         transcript_folder_gdriveID = self.settings.gdrive_transcripts_folder_id
-        self.tracker.workflow_status.transcription_gdrive_id = await gh.upload_to_gdrive(folder_GdriveID=transcript_folder_gdriveID,file_path=local_file_path)
+        self.tracker.workflow_status_model.transcription_gdrive_id = await gh.upload_to_gdrive(folder_GdriveID=transcript_folder_gdriveID,file_path=local_file_path)
         self.logger.debug("Transcript is done uploading.")
-        await self.tracker.update_status()
+        await self.tracker.update_status(state=WorkflowStates.TRANSCRIPTION_UPLOAD_COMPLETE, comment='Transcript has completed.', transcript_gdriveid= transcript_folder_gdriveID, store=True)
  
     async def _save_transcription_to_file(self, transcription_text, local_file_path):
         """
