@@ -7,6 +7,17 @@ from workflow_status_model import WorkflowStatusModel  # Adjust this import as n
 from workflow_states_code import WorkflowStates  # Adjust this import as necessary
 
 from workflow_error_code import WorkflowOperationError  # Adjust this import as necessary
+import json
+from functools import wraps
+import inspect
+
+class WorkflowException(Exception):
+    def __init__(self, status=WorkflowStates.ERROR, error_message=None, store=False, raise_exception=True, update_status=True):
+        super().__init__(error_message)
+        self.status = status
+        self.store = store
+        self.raise_exception = raise_exception
+        self.update_status = update_status
 
 class WorkflowTracker:
     """
@@ -37,6 +48,13 @@ class WorkflowTracker:
             self.logger = LoggerBase.setup_logger('WorkflowTracker')
             self._mp3_gfile_id = None
             self._mp3_gfile_name = None
+            # Initialize a dictionary to track counts of logged states
+            self._state_counts = {}
+            self.store_error = None
+
+    def set_store_error(self, value: bool):
+        """Dynamically sets the flag indicating whether to store errors."""
+        self.store_error = value
 
     @property
     def mp3_gfile_id(self):
@@ -64,6 +82,23 @@ class WorkflowTracker:
             "state": state
         }
 
+   
+
+    def _log_flow_state(self, state: WorkflowStates, comment: str):
+        # Increment the count for the given state, starting at 1 if it's the first time
+        if state.name in self._state_counts:
+            self._state_counts[state.name] += 1
+        else:
+            self._state_counts[state.name] = 1
+
+        # Append the count to the state name for uniqueness
+        state_with_count = f"{state.name}-{self._state_counts[state.name]}"
+        log_message = {"state": state.name, "comment":comment, "count": self._state_counts[state.name]}
+
+        # Log the message with the state count appended
+        self.logger.flow(json.dumps(log_message))
+
+
     async def update_status(
     self, 
     state: Enum = None, 
@@ -77,16 +112,18 @@ class WorkflowTracker:
             return True
         
         is_valid = await _validate_state()
+        msg = "A call was made to update_status. "
         if not is_valid:
-            self.logger.debug(f"Check of a valid stated: {state.name} did not pass.  returning")
+            self.logger.debug(msg + f"Check of a valid state: {state.name} did not pass.  Returning.")
             return  # Exit the method early if the state is not valid
-        self.logger.debug(f"Check of a valid state passed in: {state.name} passed.")
+        self.logger.debug(msg + f"Check of a valid state passed in: {state.name}.")
+        self._log_flow_state(state, comment)
         # Proceed with updating the status only if the state is valid
         self.workflow_status_model.status = state.name
         self.workflow_status_model.comment = comment
         self.workflow_status_model.transcript_gdrive_id = transcript_gdriveid
 
-        if store:
+        if store or self.store_error:
             if not self._mp3_gfile_id:
                 await self.handle_error(status=WorkflowStates.ERROR,error_message='Option was to store the status. However, the mp3_file_id property is not set.',operation="update_status")
             try:
@@ -99,11 +136,42 @@ class WorkflowTracker:
                 operation="update_status", 
                 store=False,
                 raise_exception=False,
-                update_status = False
+                update_status = False # Perhaps poor design.  If set to true, will go into a non-stop recursion...
             )
         await self._notify_status_change()
 
-    async def handle_error(self, status:Enum=None, error_message: str=None, operation: str=None,store=False,raise_exception=False,update_status=True):
+
+    def async_error_handler(status=WorkflowStates.ERROR, error_message= None ,store=False, raise_exception=True, update_status=True):
+        def decorator(func):
+            @wraps(func)
+            async def wrapper(*args, **kwargs):
+                try:
+                    return await func(*args, **kwargs)
+                except WorkflowException as we:
+                    self = args[0]  # Assuming the first argument is always 'self'
+                    caller_frame = inspect.stack()[1]
+                    operation = caller_frame.function  # Dynamically get the name of the parent method.
+                    await self.tracker.handle_error(
+                        status=we.status, 
+                        error_message=str(we) or "An error occurred", 
+                        operation=operation, 
+                        store=we.store, 
+                        raise_exception=we.raise_exception, 
+                        update_status=we.update_status
+                    )
+                except Exception as e:
+                    self = args[0]  # Assuming the first argument is always 'self'
+                    if not error_message:
+                        error_message = str(e)
+                    caller_frame = inspect.stack()[1]
+                    operation = caller_frame.function  # Dynamically get the name of the parent method.
+                    # Call the instance's handle_error method with the captured exception details
+                    await self.tracker.handle_error(status=status, error_message=error_message, operation=operation, store=store, raise_exception=raise_exception, update_status=update_status)
+                    # No need to re-raise, handle_error will decide based on raise_exception parameter
+            return wrapper
+        return decorator
+
+    async def handle_error(self, status:Enum=None, error_message: str=None, operation: str=None,store=False,raise_exception=True,update_status=False):
         # Default to WorkflowStates.ERROR if no status is provided
         error_status = WorkflowStates.ERROR if not status else status
         detailed_error_message = f"Error during {operation}: {error_message}" if operation else error_message

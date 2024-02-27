@@ -1,34 +1,40 @@
 from enum import Enum
 
 class WorkflowStates(Enum):
-    START = "start"
-    DOWNLOAD_STARTING = "download_starting"
-    DOWNLOADING = "downloading"
-    DOWNLOAD_FAILED = "download_failed"
-    DOWNLOAD_COMPLETE = "download_complete"
-    UPLOAD_COMPLETE = "upload_complete"
-    TRANSCRIPTION_STARTING = "transcription_starting"
-    TRANSCRIPTION_FAILED = "transcription_failed"
-    LOADING_MODEL = "loading_model"
-    TRANSCRIPTION_UPLOAD_COMPLETE = "transcription upload complete"
-    TRANSCRIBING = "transcribing"
-    TRANSCRIPTION_COMPLETE = "transcription_complete"
-    ERROR = "error"
-    VALIDATING = "validating"
-    COMPLETED = "completed"
-    UNKNOWN = "unknown"
+    START = ("start", "Workflow initiated")
+    TRANSCRIPTION_STARTING = ("transcription_starting", "Transcription process starting")
+    LOADING_MODEL = ("loading whisper model","loading whisper model")
+    TRANSCRIBING = ("transcribing","transcribing")
+    TRANSCRIPTION_FAILED = ("transcription_failed", "Transcription failed")
+    TRANSCRIPTION_COMPLETE = ("transcription_complete", "Transcription completed successfully")
+    TRANSCRIPTION_UPLOAD_COMPLETE = ("transcription upload complete", "Transcription file uploaded")
+    ERROR = ("error", "An error occurred in the workflow")
+    # Add other states as needed...
 
+    @property
+    def state_identifier(self):
+        return self.value[0]
 
-    # The values in the enum include a placeholder for the id.
-    # I was including a tracker id in the value but the id doesn't really help the caller.  It is totally internal.
-    # def format_description(self, id="(not provided)"):
-    #     """Format the description to include the workflow ID."""
-    #     return self.value.format(id=id)
+    @property
+    def description(self):
+        return self.value[1]
+
+    def to_log_message(self, detail="", **kwargs):
+        """Convert an enum state to a log message dictionary with a human-readable description."""
+        base_message = {
+            "flow_state": self.state_identifier,
+            "description": self.description
+        }
+
+        if detail:
+            base_message["detail"] = detail.format(**kwargs)
+        
+        return base_message
 
     def as_dict(self):
         """Return a dictionary representation of the status with formatted description."""
         return {
             "name": self.name,
-            "description": self.value
+            "description": self.value[1]
         }
-    
+
