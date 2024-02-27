@@ -15,7 +15,6 @@ class Settings(BaseSettings):
     monitor_frequency_in_secs: int
     audio_quality_default: str
     compute_type_default: str
-    tracker_json_file_path : str
     google_service_account_credentials_path: str 
     google_drive_oauth_scopes: List[str]
     transcription_url: str

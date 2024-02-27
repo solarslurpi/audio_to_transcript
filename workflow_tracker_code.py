@@ -52,10 +52,6 @@ class WorkflowTracker:
             self._state_counts = {}
             self.store_error = None
 
-    def set_store_error(self, value: bool):
-        """Dynamically sets the flag indicating whether to store errors."""
-        self.store_error = value
-
     @property
     def mp3_gfile_id(self):
         return self._mp3_gfile_id
@@ -161,12 +157,16 @@ class WorkflowTracker:
                     )
                 except Exception as e:
                     self = args[0]  # Assuming the first argument is always 'self'
-                    if not error_message:
-                        error_message = str(e)
+                    evolved_error_message =  str(e) if not error_message else error_message                   
                     caller_frame = inspect.stack()[1]
-                    operation = caller_frame.function  # Dynamically get the name of the parent method.
+                    operation = caller_frame.function  # Dynamically get the name of the parent method. 
+                    # We're transcribing, but there was a failure. We should have the mp3 gfile and we should store this state.
+                    if args[1] == WorkflowStates.TRANSCRIPTION_FAILED.name:
+                        store_state = True
+                    else:
+                        store_state = store
                     # Call the instance's handle_error method with the captured exception details
-                    await self.tracker.handle_error(status=status, error_message=error_message, operation=operation, store=store, raise_exception=raise_exception, update_status=update_status)
+                    await self.tracker.handle_error(status=status, error_message=evolved_error_message, operation=operation, store=store_state, raise_exception=raise_exception, update_status=update_status)
                     # No need to re-raise, handle_error will decide based on raise_exception parameter
             return wrapper
         return decorator

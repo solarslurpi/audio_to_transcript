@@ -5,6 +5,7 @@ from workflow_states_code import WorkflowStates
 from pathlib import Path
 from fastapi import UploadFile
 from io import BytesIO
+from pydantic_models import TranscriptionOptionsWithPath, TranscriptionOptionsWithUpload
 
 @pytest.fixture
 def valid_mp3_gdrive_id():
@@ -30,6 +31,15 @@ def valid_UploadFile(valid_mp3_path):
     assert(num_upload_bytes == num_valid_mp3_bytes)
     return upload_file
 
+@pytest.fixture
+def gfile_transcription_options(valid_mp3_gdrive_id):
+    transcription_options = TranscriptionOptionsWithUpload(
+        audio_quality = "medium",
+        compute_type = "float16",
+        input_file = valid_mp3_gdrive_id
+    )
+    return transcription_options
+
 @pytest.mark.asyncio
 async def test_check_upload_file_content(valid_UploadFile: UploadFile):
     # Read the first few bytes to check if the file has content
@@ -37,7 +47,7 @@ async def test_check_upload_file_content(valid_UploadFile: UploadFile):
     content = await valid_UploadFile.read(10)  # Read the first 10 bytes
     # Check if anything was read
     if content:
-        print(f"The file has content.")
+        print("The file has content.")
     else:
         print("The file is empty.")
     # Reset the pointer to the beginning of the file for future reads
@@ -60,7 +70,7 @@ async def test_copy_UploadFile_to_local_mp3_path(valid_UploadFile):
     mp3_gdrive_id, local_mp3_path = await transcriber.copy_uploadfile_to_local_mp3(valid_UploadFile)
     _run_asserts_for_local_mp3_path(mp3_gdrive_id, local_mp3_path)
 
-@pytest.mark.asyncio      
+@pytest.mark.asyncio
 async def test_copy_gfile_to_local_mp3_path(valid_mp3_gdrive_id):
     '''
     Test the first major part of the code: Preparing the mp3 file for transcription.
@@ -69,23 +79,26 @@ async def test_copy_gfile_to_local_mp3_path(valid_mp3_gdrive_id):
     mp3_gdrive_id, local_mp3_path = await transcriber.copy_gfile_to_local_mp3(valid_mp3_gdrive_id)
     # Ensure mp3_path is an instance of Path and ends with '.mp3'
     _run_asserts_for_local_mp3_path(mp3_gdrive_id, local_mp3_path)
-    
-@pytest.mark.asyncio 
+
+@pytest.mark.asyncio
 async def test_transcribe_mp3_success(valid_mp3_path) :
     transcriber = AudioTranscriber()
-    audio_quality="medium"
-    compute_type="float16"
-    transcription_text = await transcriber.transcribe_mp3(valid_mp3_path, audio_quality, compute_type)
+    transcription_options = TranscriptionOptionsWithPath(
+        audio_quality='medium',  # Assuming 'high' is a valid key in AUDIO_QUALITY_DICT
+        compute_type='float16',    # Assuming 'gpu' is a valid key in COMPUTE_TYPE_MAP
+        audio_file_path=Path(valid_mp3_path)  # Replace with an actual file path
+    )
+    transcription_text = await transcriber.transcribe_mp3(transcription_options)
     assert transcription_text is not None, "Transcription result should not be None"
     min_char_count = 100  # Example minimum character count
     assert len(transcription_text) >= min_char_count, f"Transcription text should contain at least {min_char_count} characters."
     assert isinstance(transcription_text, str), "Transcription result should be a string"
     assert len(transcription_text) > 0, "Transcription result should not be empty"
 
-async def run_transcription_test_success(input_source, audio_quality="medium", compute_type="float16"):
+async def run_transcription_test_success(options:TranscriptionOptionsWithUpload):
     """Helper function to run the transcription test and perform common assertions."""
     transcriber = AudioTranscriber()
-    transcription_text = await transcriber.transcribe(input_source, audio_quality, compute_type)
+    transcription_text = await transcriber.transcribe(options)
 
     assert transcription_text is not None, "Transcription result should not be None"
     min_char_count = 100  # Example minimum character count
@@ -106,6 +119,6 @@ async def test_audio_transcription_workflow_mp3_upload_success(valid_UploadFile)
     await run_transcription_test_success(valid_UploadFile)
 
 @pytest.mark.asyncio
-async def test_audio_transcription_workflow_mp3_gdrive_success(valid_mp3_gdrive_id):
+async def test_audio_transcription_workflow_mp3_gdrive_success(gfile_transcription_options):
     """Test full transcription process for a Google Drive file ID input."""
-    await run_transcription_test_success(GDriveInput(gdrive_id=valid_mp3_gdrive_id))
+    await run_transcription_test_success(gfile_transcription_options)

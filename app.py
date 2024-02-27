@@ -5,11 +5,11 @@ from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 import uvicorn
 import os
-from audio_transcriber_code import AudioTranscriber, AUDIO_QUALITY_DICT, COMPUTE_TYPE_MAP
+from audio_transcriber_code import AudioTranscriber, GDriveInput
+from pydantic_models import  AUDIO_QUALITY_MAP, COMPUTE_TYPE_MAP
 from youtube_transfer import YouTubeTransfer
 from logger_code import LoggerBase
 from workflow_tracker_code import WorkflowTracker
-from audio_transcriber_code import GDriveInput
 from env_settings_code import Settings, get_settings
 # from gdrive_helper_code import GDriveHelper
 # from workflow_monitor_code import WorkflowMonitor
@@ -21,7 +21,7 @@ app = FastAPI()
 
 # Dependency to process the input and decide whether it's a file upload or a Google Drive ID
 async def process_input(
-    file: Optional[UploadFile] = File(None), 
+    file: Optional[UploadFile] = File(None),
     gdrive_id: Optional[str] = Form(None),
 ) -> Union[UploadFile, GDriveInput]:
     if file and gdrive_id:
@@ -37,9 +37,9 @@ class TranscriptionOptions(BaseModel):
     @field_validator('audio_quality')
     @classmethod
     def validate_audio_quality(cls, v):
-        if v is not None and v not in AUDIO_QUALITY_DICT.keys():
+        if v is not None and v not in AUDIO_QUALITY_MAP.keys():
             raise ValueError(f'{v} is not a valid model name.')
-        return AUDIO_QUALITY_DICT[v]
+        return AUDIO_QUALITY_MAP[v]
 
     @field_validator('compute_type')
     @classmethod
@@ -73,7 +73,7 @@ async def root():
 
 @app.post("/transcribe/mp3")
 async def transcribe_mp3(
-    background_tasks: BackgroundTasks, 
+    background_tasks: BackgroundTasks,
     input_file: Union[UploadFile, GDriveInput] = Depends(process_input),
     audio_quality: Optional[str] = Form(Settings().audio_quality_default),
     compute_type: Optional[str] = Form(Settings().compute_type_default),
@@ -88,14 +88,14 @@ async def transcribe_mp3(
 
 @app.post("/youtube/download")
 async def download_youtube_audio(
-    background_tasks: BackgroundTasks, 
+    background_tasks: BackgroundTasks,
     yt_url: str = Form(...)
 ):
     try:
         task_id = await _perform_task(
-            background_tasks, 
-            YouTubeTransfer(tracker).download_youtube_audio_to_gdrive, 
-            yt_url, 
+            background_tasks,
+            YouTubeTransfer(tracker).download_youtube_audio_to_gdrive,
+            yt_url,
             current_task="youtube_download"
         )
     except Exception as e:
@@ -122,7 +122,7 @@ async def status_stream(request: Request, task_id: str):
 # Define the common logic in a separate function
 async def _perform_task(background_tasks: BackgroundTasks, task_func, *args, **kwargs):
     try:
-        
+
         background_tasks.add_task(task_func, *args)
         state = "After adding task to background_tasks"
         return tracker.task_status.current_id
@@ -134,7 +134,7 @@ async def _perform_task(background_tasks: BackgroundTasks, task_func, *args, **k
 
 # @app.post("/monitor/start")
 # async def monitor_start(
-#     background_tasks: BackgroundTasks, 
+#     background_tasks: BackgroundTasks,
 #     gdrive_id_mp3: Optional[str] = Form(None),  # Marked as explicitly optional
 #     gdrive_id_transcripts: Optional[str] = Form(None),  # Marked as explicitly optional
 #     monitoring_frequency: Optional[int] = Form(None),  # Marked as explicitly optional
@@ -158,7 +158,7 @@ async def _perform_task(background_tasks: BackgroundTasks, task_func, *args, **k
 #     logger.debug("Completed code in validating access to GDrive folers.")
 #     ##################################
 #     # manage_transcription_workflow
-#     ##################################  
+#     ##################################
 #     try:
 #         monitor = WorkflowMonitor()
 #         logger.debug("Starting code in manage_transcription_workflow")
