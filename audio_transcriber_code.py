@@ -41,12 +41,16 @@ import torch
 from transformers import pipeline
 
 from env_settings_code import get_settings
-from gdrive_helper_code import GDriveHelper, GDriveInput
+from gdrive_helper_code import GDriveHelper
 from logger_code import LoggerBase
-from pydantic_models import TranscriptionOptionsWithPath, TranscriptionOptionsWithUpload, TranscriptText
+from pydantic_models import (TranscriptionOptionsWithPath,
+                             TranscriptionOptionsWithUpload,
+                             TranscriptText,
+                             GDriveInput,
+                             ValidInput,
+                             validate_upload_file)
 from workflow_states_code import WorkflowStates
 from workflow_tracker_code import WorkflowTracker
-import pysnooper
 
 
 class AudioTranscriber:
@@ -73,7 +77,6 @@ class AudioTranscriber:
         self.gh = GDriveHelper()
 
     @WorkflowTracker.async_error_handler(status=WorkflowStates.ERROR)
-    @pysnooper.snoop()
     async def transcribe(self, options:TranscriptionOptionsWithUpload) -> str:
         """
         Asynchronously transcribes audio from an input source to text. This method handles the entire workflow of the
@@ -99,7 +102,7 @@ class AudioTranscriber:
         Note:
         - This method is designed to be called asynchronously within an asyncio event loop to efficiently manage I/O
         operations and long-running tasks without blocking the execution of other coroutines.
-    """
+        """
         # First load the mp3 file (either a GDrive file or uploaded) into a local temporary file
         mp3_temp_path = await self.create_local_mp3_from_input(options.input_file)
         await self.tracker.update_status(state=WorkflowStates.START, comment='Beginning the transcription workflow.', store=bool(self.tracker.mp3_gfile_id))
@@ -114,7 +117,7 @@ class AudioTranscriber:
         return transcription_text
 
     @WorkflowTracker.async_error_handler(status=WorkflowStates.ERROR)
-    async def create_local_mp3_from_input(self, input_file: Union[UploadFile, GDriveInput]) -> Path:
+    async def create_local_mp3_from_input(self, input_file: ValidInput) -> Path:
         """
         Asynchronously creates a local copy of an MP3 file from the specified input.
 
@@ -136,9 +139,11 @@ class AudioTranscriber:
         - Exception: Propagates any exceptions raised during the file copying or downloading process.
         """
         if isinstance(input_file, UploadFile):
+            # Check the contents of the UploadFile to see if it contains an mp3 file.
+            await validate_upload_file(input_file)
             self.tracker.mp3_gfile_id, mp3_path = await self.copy_uploadfile_to_local_mp3(input_file)
         elif isinstance(input_file, GDriveInput):
-            self.tracker.mp3_gfile_id, mp3_path = await self.copy_gfile_to_local_mp3(input_file.gdrive_id)
+            self.tracker.mp3_gfile_id, mp3_path = await self.copy_gfile_to_local_mp3(input_file)
         self.tracker.mp3_gfile_name = mp3_path.name
         return mp3_path
 
@@ -164,6 +169,7 @@ class AudioTranscriber:
         - Exception: Any exception raised during the file saving or uploading process is caught
         and handled by the `async_error_handler` decorator, which sets the workflow status accordingly.
         """
+
         local_mp3_file_path = Path(self.settings.local_mp3_dir) / upload_file.filename
         upload_file.file.seek(0)  # Rewind to the start of the file.
         async with aiofiles.open(str(local_mp3_file_path), "wb") as temp_file:
@@ -174,7 +180,7 @@ class AudioTranscriber:
 
 
     @WorkflowTracker.async_error_handler(status=WorkflowStates.ERROR)
-    async def copy_gfile_to_local_mp3(self, gdrive_id: str) -> Tuple[str, Path]:
+    async def copy_gfile_to_local_mp3(self, gdrive_input: GDriveInput) -> Tuple[str, Path]:
         """
         Downloads an MP3 file from Google Drive to the local server directory for processing.
 
@@ -183,13 +189,14 @@ class AudioTranscriber:
         Google Drive ID and the local file path, aiding in file tracking and accessibility for the transcription process.
 
         Args:
-            gdrive_id (str): The Google Drive ID of the MP3 file to be downloaded.
+            gdrive_input (GDriveInput): The pydantic class that verifies the .gdrive_ID field is a GDrive ID.
 
         Returns:
             Tuple[str, Path]: The Google Drive ID and the local file path where the MP3 has been saved.
         """
-        local_file_path = await self.gh.download_from_gdrive(gdrive_id, self.settings.local_mp3_dir)
-        return gdrive_id, local_file_path
+        local_file_path = await self.gh.download_from_gdrive(gdrive_input, self.settings.local_mp3_dir)
+        # The gdrive_id and local_file_path are returned so this workflow can be tracked.
+        return gdrive_input.gdrive_id, local_file_path
 
 
     @WorkflowTracker.async_error_handler(status=WorkflowStates.ERROR)
@@ -264,7 +271,7 @@ class AudioTranscriber:
         Insight:
         It's wrapped with an async error handler to gracefully handle failures, marking the transcription phase as failed in such events. The method encapsulates model loading and execution within a synchronous function, offloading it to an executor to maintain async workflow integrity.
         """
-        self.logger.debug("FLOW: Transcribe using HF's Transformer pipeline (_transcribe_pipeline)...LOADING MODEL")
+        self.logger.debug("Transcribe using HF's Transformer pipeline (_transcribe_pipeline)...LOADING MODEL")
         def load_and_run_pipeline():
             pipe = pipeline(
                 "automatic-speech-recognition",
