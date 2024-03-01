@@ -28,7 +28,7 @@ from workflow_states_code import WorkflowStates
 @pytest.mark.asyncio
 async def test_transcribe_gdrive_simple_success(mocker):
     transcriber = AudioTranscriber()
-    mock_input_file = GDriveInput(gdrive_id="1ukjAXeITUyJ606Y62mho3XOMnsq-tfu5") 
+    mock_input_file = GDriveInput(gdrive_id="1ukjAXeITUyJ606Y62mho3XOMnsq-tfu5")
     mocker.patch.object(AudioTranscriber, '_verify_and_prepare_file',return_value=mock_input_file)
     text = await transcriber.transcribe(mock_input_file)
     assert isinstance(text,str)
@@ -36,7 +36,7 @@ async def test_transcribe_gdrive_simple_success(mocker):
 @pytest.mark.asyncio
 async def test_transcribe_gdrive_simple_failure(mocker):
     transcriber = AudioTranscriber()
-    mock_input_file = GDriveInput(gdrive_id="1ukjAXeITUyJ606Y62mho3XOMnsq-tfu5") 
+    mock_input_file = GDriveInput(gdrive_id="1ukjAXeITUyJ606Y62mho3XOMnsq-tfu5")
     mocker.patch.object(AudioTranscriber, '_verify_and_prepare_file',return_value=None)
     text = await transcriber.transcribe(mock_input_file)
     assert not text
@@ -68,11 +68,11 @@ async def test_transcribe_exception_handling(mocker):
     # Use AsyncMock for async methods
     mocker.patch.object(transcriber, '_verify_and_prepare_file', new_callable=AsyncMock, side_effect=Exception('Failed to prepare file'))
     mocker.patch.object(transcriber.tracker, 'handle_error', new_callable=AsyncMock)
-    
+
     fake_input = ...  # Construct a suitable fake input for the test
 
     await transcriber.transcribe(fake_input)
-    
+
     transcriber.tracker.handle_error.assert_awaited_once_with(
         status=WorkflowStates.TRANSCRIPTION_FAILED,
         operation="transcription",
@@ -94,14 +94,14 @@ async def test_transcribe_exception_handling(mocker):
 #     # with patch('workflow_tracker_code.WorkflowTracker') as mock_tracker, \
 #     #      patch('logger_code.LoggerBase.setup_logger') as mock_setup_logger, \
 #     #      patch('gdrive_helper_code.GDriveHelper') as mock_gdrive_helper:
-#     mock_workflow_tracker = mocker.patch('workflow_tracker_code.WorkflowTracker')    
+#     mock_workflow_tracker = mocker.patch('workflow_tracker_code.WorkflowTracker')
 #     # Instantiate the AudioTranscriber
 #     transcriber = AudioTranscriber()
-        
+
 #     mock_workflow_tracker.assert_called_once()
 #         # mock_setup_logger.assert_called_once_with("AudioTranscriber")
 #         # mock_gdrive_helper.assert_called_once()
-        
+
         # Assertions to check that the instances are correctly set
         # assert transcriber.tracker is mock_tracker.return_value
         # assert transcriber.logger is mock_setup_logger.return_value

@@ -1,7 +1,7 @@
 import pytest
 from audio_transcriber_code import AudioTranscriber, GDriveInput
 from gdrive_helper_code import GDriveHelper
-from workflow_states_code import WorkflowStates
+from workflow_states_code import WorkflowEnum
 from pathlib import Path
 from fastapi import UploadFile
 
@@ -32,7 +32,7 @@ async def run_transcription_test_success(input_source, audio_quality="medium", c
     await transcriber.upload_transcript(transcription_text)
     gh = GDriveHelper()
     transcription_status_dict = await gh.fetch_transcription_status_dict(input_source.gdrive_id if isinstance(input_source, GDriveInput) else transcriber.tracker.mp3_gfile_id)
-    assert transcription_status_dict['state'] == WorkflowStates.TRANSCRIPTION_UPLOAD_COMPLETE.name
+    assert transcription_status_dict['state'] == WorkflowEnum.TRANSCRIPTION_UPLOAD_COMPLETE.name
     assert transcription_status_dict['transcriptionId'], "Transcription ID should not be empty"
     assert len(transcription_status_dict['transcriptionId']) > 20, "Transcription ID seems too short"
 

@@ -5,8 +5,8 @@ from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 import uvicorn
 import os
-from audio_transcriber_code import AudioTranscriber, GDriveInput
-from pydantic_models import  AUDIO_QUALITY_MAP, COMPUTE_TYPE_MAP
+from audio_transcriber_code import AudioTranscriber
+from pydantic_models import  AUDIO_QUALITY_MAP, COMPUTE_TYPE_MAP, GDriveInput
 from youtube_transfer import YouTubeTransfer
 from logger_code import LoggerBase
 from workflow_tracker_code import WorkflowTracker

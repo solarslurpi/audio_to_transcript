@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
-from workflow_states_code import WorkflowStates
+from workflow_states_code import WorkflowEnum
 from audio_transcriber_code import AudioTranscriber
 import torch
 
@@ -19,7 +19,7 @@ async def test_transcribe_mp3_invalid_path(mock_handle_error):
     await transcriber._transcribe_mp3(audio_file_path=invalid_path, audio_quality="medium", compute_type="float32")
 
     mock_handle_error.assert_awaited_once_with(
-        status=WorkflowStates.TRANSCRIPTION_FAILED,
+        status=WorkflowEnum.TRANSCRIPTION_FAILED,
         error_message=f"Audio file does not exist or is not a file: {invalid_path}",
         operation="_transcribe_mp3",
         store=True,
@@ -28,7 +28,7 @@ async def test_transcribe_mp3_invalid_path(mock_handle_error):
 @pytest.mark.asyncio
 async def test_transcribe_mp3_unsupported_audio_quality(mp3_test_path, caplog):
     transcriber = AudioTranscriber()
-    valid_path = mp3_test_path 
+    valid_path = mp3_test_path
     unsupported_quality = "ultra_high"  # Example of unsupported audio quality
 
     await transcriber._transcribe_mp3(audio_file_path=valid_path, audio_quality=unsupported_quality, compute_type="float32")
@@ -92,23 +92,23 @@ async def test_transcribe_success(mock_transcribe_pipeline, mp3_test_path):
 @patch("audio_transcriber_code.AudioTranscriber._transcribe_pipeline")
 @pytest.mark.asyncio
 async def test_transcribe_failure(mock_transcribe_pipeline, mp3_test_path, mocker):
-    # By mocking the _transcribe_pipeline() to throw an exception and then checking that handle_error was called with the expected parameters, 
+    # By mocking the _transcribe_pipeline() to throw an exception and then checking that handle_error was called with the expected parameters,
     # we are ensuring that the error handling pathways are functioning as intended.
     # Setup
     transcriber = AudioTranscriber()
     mock_transcribe_pipeline.side_effect = Exception("Transcription failed")
-    
+
     # Mock the error handling to capture its invocation
     mock_handle_error = mocker.patch.object(transcriber.tracker, 'handle_error', new_callable=AsyncMock)
-    
+
     # Attempt to transcribe, expecting no exception to be raised to this level
     await transcriber._transcribe_mp3(mp3_test_path, "medium", "float16")
-    
+
     # Verify that handle_error was called as expected
     mock_handle_error.assert_awaited_once_with(
-        status=WorkflowStates.TRANSCRIPTION_FAILED, 
+        status=WorkflowEnum.TRANSCRIPTION_FAILED,
         error_message="Transcription failed",
-        operation="_transcribe_mp3", 
+        operation="_transcribe_mp3",
         store=True,
         raise_exception=True
     )
@@ -119,8 +119,8 @@ async def test_transcribe_mp3_success(mock_transcribe_pipeline, mp3_test_path):
     """
     Tests successful MP3 transcription simulation by mocking the transcription pipeline.
 
-    Verifies that _transcribe_mp3 method correctly invokes the transcription pipeline with expected parameters (file path, model name, compute type) 
-    and processes its mock return value. Ensures integration and parameter passing within AudioTranscriber are functioning as intended, 
+    Verifies that _transcribe_mp3 method correctly invokes the transcription pipeline with expected parameters (file path, model name, compute type)
+    and processes its mock return value. Ensures integration and parameter passing within AudioTranscriber are functioning as intended,
     without actually performing any real transcription.
 
     Args:
@@ -130,10 +130,10 @@ async def test_transcribe_mp3_success(mock_transcribe_pipeline, mp3_test_path):
     # Setup
     transcriber = AudioTranscriber()
     mock_transcribe_pipeline.return_value = {'text': "Expected transcription text"}
-    
+
     # Exercise
     result_text = await transcriber._transcribe_mp3(mp3_test_path, "medium", "float32")
-    
+
     # Verify
     mock_transcribe_pipeline.assert_called_once_with(mp3_test_path, "openai/whisper-medium", torch.float32)
     assert result_text == "Expected transcription text", "The transcription text does not match the expected output."
@@ -164,7 +164,7 @@ async def test_transcribe_mp3_handles_pipeline_exception(mock_transcribe_pipelin
     # Verify: Ensure the error handler was called correctly
     # Since `handle_error` can be called more than once, check for at least one call with expected parameters
     mock_handle_error.assert_any_await(
-        status=WorkflowStates.TRANSCRIPTION_FAILED,
+        status=WorkflowEnum.TRANSCRIPTION_FAILED,
         error_message="Mock transcription failure",
         operation="_transcribe_mp3",
         store=True,

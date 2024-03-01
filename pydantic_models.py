@@ -1,11 +1,14 @@
 import os
-import re
 from pathlib import Path
+from datetime import datetime
+from uuid import uuid4
 
-from pydantic import BaseModel, field_validator
-from typing import Union
+from pydantic import BaseModel, field_validator, Field
+from typing import Union, Optional
 import torch
 from fastapi import UploadFile
+
+from workflow_states_code import WorkflowStates
 
 
 AUDIO_QUALITY_MAP = {
@@ -28,97 +31,77 @@ COMPUTE_TYPE_MAP = {
 }
 
 # Asynchronous UploadeFile validation function
-async def validate_upload_file(file: UploadFile):
+async def validate_upload_file(upload_file: UploadFile):
     # Validate file extension
     valid_extensions = ['.mp3']
-    _, file_extension = os.path.splitext(file.filename)
+    _, file_extension = os.path.splitext(upload_file.filename)
     if file_extension not in valid_extensions:
         raise ValueError(f"Invalid file extension. It should be .mp3 but it is {file_extension}.")
 
     # Validate file size (async operation)
-    await file.seek(0, os.SEEK_END)  # Move to end of file to get size
-    file_size = await file.tell()  # Get current position in file, which is its size in bytes
-    await file.seek(0)  # Reset file pointer to beginning
+    await upload_file.seek(0)  # Move to end of file to get size
+    file_size = len(upload_file.file.read()) # read to the end
+    await upload_file.seek(0)  # Reset file pointer to beginning
     # Define your file size limit here
     min_size = 10_240  # Minimum mp3 size in bytes (10KB)
     if file_size < min_size:
-        raise ValueError("File size too small to be a valid MP3 file.")if
-    if file.content_type != 'audio/mpeg':
-        raise ValueError(f"Invalid file type.  Should be audio/mpeg.  But it is: {file.content_type}")
+        raise ValueError("File size too small to be a valid MP3 file.")
     # Return the file if all validations pass
-    return file
+    return upload_file
 
 class GDriveInput(BaseModel):
-    gdrive_id: str
+    gdrive_id: str = Field(..., pattern=r'^[a-zA-Z0-9_-]{25,33}$')
 
-    @field_validator('gdrive_id')
-    @classmethod
-    def id_must_match_google_drive_format(cls, v):
-        # Regex to match the described format: 25-30 characters, including letters, numbers, and underscores
-        pattern = re.compile(r'^[a-zA-Z0-9_-]{25,30}$')
-        if not pattern.match(v):
-            raise ValueError('Invalid Google Drive ID format')
-        return v
+class ValidFileInput(BaseModel):
+    input_file: Union[UploadFile, GDriveInput]
 
-
-class CommonTranscriptionOptions(BaseModel):
+class TranscriptionOptions(BaseModel):
     audio_quality: str
     compute_type: str
+    audio_path: Union[Path, None] = None
+    input_file: Union[UploadFile, GDriveInput, None] = None
 
+    # Ensure AUDIO_QUALITY_MAP and COMPUTE_TYPE_MAP are defined within the class
 
     @field_validator('audio_quality')
     @classmethod
-    def validate_audio_quality(cls, v):
-        if v is not None and v not in AUDIO_QUALITY_MAP.keys():
-            raise ValueError(f'{v} is not a valid model name.')
-        return AUDIO_QUALITY_MAP[v]
+    def check_audio_quality(cls, v):
+        if v not in AUDIO_QUALITY_MAP.keys():
+            raise ValueError(f"{v} is not a valid audio quality.")
+        return v
 
     @field_validator('compute_type')
     @classmethod
-    def validate_compute_type(cls, v):
-        if v is not None and v not in COMPUTE_TYPE_MAP.keys():
-            raise ValueError(f'{v} is not a valid compute type.')
-        return COMPUTE_TYPE_MAP[v]
-
-class TranscriptionOptionsWithPath(CommonTranscriptionOptions):
-    audio_file_path: Path
-
-    @field_validator('audio_file_path')
-    @classmethod
-    def validate_audio_file_path(cls,v):
-        if not isinstance(v,Path):
-            raise ValueError(f"audio_file_path must be a Path instance, got {type(v)}")
-        if not v.exists() or not v.is_file():
-            raise ValueError(f"audio_file_path does not exist or is not a file: {v}")
+    def check_compute_type(cls, v):
+        if v not in COMPUTE_TYPE_MAP.keys():
+            raise ValueError(f"{v} is not a valid compute type.")
         return v
 
-    # Specific validation for audio_file_path if needed
+    @field_validator("audio_path")
+    def check_audio_path(cls, v: Union[str, Path, None]) -> Path:
+        """
+        Validates the audio_path field to be:
+            - None
+            - A valid Path object (absolute or relative)
+            - Not pointing to a non-existent file or is not a file.
+            - The file contains at least minimal bytes for an mp3 file (rough estimate)
+        """
 
-def validate_input_file(cls, v):
-    if isinstance(v, dict):  # Assuming GDriveInput will be passed as a dict
-        return GDriveInput(**v)
-    elif isinstance(v, UploadFile):  # Or however you wish to validate UploadFile
+        if v is None:
+            return None
+
+        if not isinstance(v, Path):
+            raise ValueError("audio_path must be a Path object or None")
+
+        if not v.exists():
+            raise ValueError(f"Path '{v}' does not exist")
+
+        # Check file size (adjust max_file_size as needed)
+        min_mp3_file_size = 1_024
+        if v.is_file() and v.stat().st_size < min_mp3_file_size:
+            raise ValueError(f"Audio file is not large enough to contain an mp3 file. The filesize is {min_mp3_file_size} bytes.")
+
         return v
-    else:
-        raise ValueError("Invalid input: must be an UploadFile or GDriveInput")
-
-class TranscriptionOptionsWithUpload(CommonTranscriptionOptions):
-    input_file: Union[UploadFile, GDriveInput]
-
-    @field_validator('input_file')
-    @classmethod
-    def validate(cls,v):
-        validate_input_file(cls,v)
-
-class ValidInput(BaseModel):
-    input_file: Union[UploadFile, GDriveInput]
-
-    @field_validator('input_file')
-    @classmethod
-    def validate(cls, v):
-        validate_input_file(cls,v)
-
-
 
 class TranscriptText(BaseModel):
     text: str
@@ -126,8 +109,10 @@ class TranscriptText(BaseModel):
     @field_validator('text')
     @classmethod
     def text_must_be_at_least_50_characters(cls, v):
+        if v is None:
+            raise ValueError('Transcript text must have text.  Currently, the value is None.')
         if len(v) < 50:
-            raise ValueError('Transcript text must be at least 50 characters')
+            raise ValueError('Transcript text must be at least 50 characters.')
         return v
 
 class ValidPath(BaseModel):
@@ -138,4 +123,33 @@ class ValidPath(BaseModel):
     def validate_input_file(cls,v):
         if not v.exists() or not v.is_file():
             raise ValueError(f"The path, {v} does not exist or is not a file.")
+        return v
+
+
+
+class ExtensionChecker:
+    @staticmethod
+    def is_mp3(filename: str) -> bool:
+        """Check if the filename ends with '.mp3'."""
+        return filename.endswith('.mp3')
+
+class FilenameLengthChecker:
+    MIN_LENGTH = 5  # Assuming the minimum "right length" for a filename
+    MAX_LENGTH = 255  # Assuming the maximum "right length" for a filename
+
+    @classmethod
+    def is_right_length(cls, filename: str) -> bool:
+        """Check if the filename's length is within the right range."""
+        return cls.MIN_LENGTH <= len(filename) <= cls.MAX_LENGTH
+
+class MP3filename(BaseModel):
+    filename: str
+
+    @field_validator("filename")
+    @classmethod
+    def validate_filename(cls, v: str) -> str:
+        if not ExtensionChecker.is_mp3(v):
+            raise ValueError("It is assumed the file is an mp3 file that ends in mp3.")
+        if not FilenameLengthChecker.is_right_length(v):
+            raise ValueError(f"The file length is not between {FilenameLengthChecker.MIN_LENGTH} and {FilenameLengthChecker.MAX_LENGTH} .")
         return v

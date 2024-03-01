@@ -1,40 +1,43 @@
 from enum import Enum
 
-class WorkflowStates(Enum):
+from pydantic import BaseModel, field_validator
+
+
+class WorkflowEnum(Enum):
     START = ("start", "Workflow initiated")
     TRANSCRIPTION_STARTING = ("transcription_starting", "Transcription process starting")
     LOADING_MODEL = ("loading whisper model","loading whisper model")
     TRANSCRIBING = ("transcribing","transcribing")
     TRANSCRIPTION_FAILED = ("transcription_failed", "Transcription failed")
     TRANSCRIPTION_COMPLETE = ("transcription_complete", "Transcription completed successfully")
+    TRANSCRIPTION_UPLOAD_STARTING = ("transcription upload starting", "Transcription file upload starting")
     TRANSCRIPTION_UPLOAD_COMPLETE = ("transcription upload complete", "Transcription file uploaded")
     ERROR = ("error", "An error occurred in the workflow")
-    # Add other states as needed...
+    UNKNOWN = ("unknown", "unknown")
 
-    @property
-    def state_identifier(self):
-        return self.value[0]
+    @classmethod
+    def match_value(cls, value):
+        # Using next with a generator expression to simplify the loop
+        # and using the __members__.items() to iterate through enum members
+        return next((member for name, member in cls.__members__.items() if member.value[0] == value), None)
 
-    @property
-    def description(self):
-        return self.value[1]
+class WorkflowStates(BaseModel):
 
-    def to_log_message(self, detail="", **kwargs):
-        """Convert an enum state to a log message dictionary with a human-readable description."""
-        base_message = {
-            "flow_state": self.state_identifier,
-            "description": self.description
-        }
+    status: WorkflowEnum
 
-        if detail:
-            base_message["detail"] = detail.format(**kwargs)
-        
-        return base_message
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v):
+        if not isinstance(v, WorkflowEnum):
+            raise ValueError("status must be a member of the WorkflowEnums")
+        return v
 
-    def as_dict(self):
-        """Return a dictionary representation of the status with formatted description."""
-        return {
-            "name": self.name,
-            "description": self.value[1]
-        }
-
+    @classmethod
+    def validate_state(cls,v):
+        # If v is already an instance of WorkflowEnum, return it directly
+        if isinstance(v, WorkflowEnum):
+            return v
+        matched_member = WorkflowEnum.match_value(v)
+        if matched_member:
+            return matched_member
+        raise ValueError(f"No match for: {v}")

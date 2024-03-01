@@ -1,10 +1,9 @@
-from audio_transcriber_code import AudioTranscriber
-from pydantic_models import TranscriptionOptionsWithUpload
+import re
 
-options = TranscriptionOptionsWithUpload(
-        audio_quality = "medium",
-        compute_type = "float16",
-        input_file = '1ukjAXeITUyJ606Y62mho3XOMnsq-tfu5'
-    )
-at = AudioTranscriber()
-transcription_text = at.transcribe(options)
+gdrive_id = '1ukjAXeITUyJ606Y62mho3XOMnsq-tfu5'  # Example ID
+pattern = re.compile(r'^[a-zA-Z0-9_-]{25,30}$')
+
+if pattern.match(gdrive_id):
+    print("The ID is valid.")
+else:
+    print("Invalid Google Drive ID format.")

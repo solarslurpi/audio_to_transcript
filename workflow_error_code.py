@@ -1,5 +1,52 @@
 
+import traceback
+from functools import wraps
 
+from workflow_states_code import WorkflowStates, WorkflowEnum
+from logger_code import LoggerBase
+
+
+async def handle_error(status:WorkflowStates, error_message: str=None, operation=None, raise_exception=True):
+    from misc_utils import update_status
+    logger = LoggerBase.setup_logger('handle_error')
+    # Dynamically construct parts of the message based on non-None values
+    parts = [
+        f"Operation: {operation}" if operation else "Operation: Unknown",
+        f"Error: {error_message}" if error_message else "Error: Unknown"
+    ]
+    err_msg = ". ".join(filter(None, parts))
+    logger.error(err_msg)
+    # If raise_exception is True, raise a custom exception after logging and updating the status
+    if raise_exception:
+        exception_message = err_msg
+        raise Exception(exception_message)
+
+def async_error_handler(status:WorkflowStates, error_message=None, store=False, raise_exception=True):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # self = args[0]  # Assuming the first argument is always 'self'
+            try:
+                return await func(*args, **kwargs)
+            except Exception as e:
+                tb_str = traceback.format_exc()
+                evolved_error_message = error_message if error_message else str(e)
+                detailed_error_message = f"{evolved_error_message}\nTraceback:\n{tb_str}"
+
+                await handle_error(
+                    status=status,
+                    error_message=detailed_error_message,
+                    operation=func.__name__,
+                    raise_exception=raise_exception
+                )
+
+                if raise_exception:
+                    raise e
+        return wrapper
+    return decorator
+
+
+# TODO: Not sure using the rest of this:
 class WorkflowError(Exception):
     """Base class for errors related to workflow operations."""
     def __init__(self, message="An error occurred during workflow operation.", system_error=None):
@@ -16,5 +63,3 @@ class WorkflowOperationError(WorkflowError):
         if detail:
             message += f" Detail: {detail}."
         super().__init__(message, system_error=system_error)
-
-

@@ -2,7 +2,7 @@ import pytest
 import asyncio
 from unittest.mock import AsyncMock, patch
 from workflow_tracker_code import WorkflowTracker
-from workflow_states_code import WorkflowStates
+from workflow_states_code import WorkflowEnum
 
 @pytest.mark.asyncio
 @patch('workflow_tracker_code.WorkflowTracker._notify_status_change', new_callable=AsyncMock)
@@ -15,12 +15,12 @@ async def test_update_status_success(mock_update_gfile, mock_notify_change):
     methods to reflect these changes.
     """
     tracker = WorkflowTracker.get_instance()
-    state = WorkflowStates.DOWNLOAD_COMPLETE
+    state = WorkflowEnum.DOWNLOAD_COMPLETE
     comment = "Download complete for workflow ID {id}."
     gdrive_id = "some-gdrive-id"
-    
+
     await tracker.update_status(state=state, comment=comment, transcript_gdriveid=gdrive_id, store=True)
-    
+
     assert tracker.workflow_status_model.status == state
     assert tracker.workflow_status_model.comment == comment
     assert tracker.workflow_status_model.transcript_gdrive_id == gdrive_id
@@ -64,7 +64,7 @@ async def test_update_status_concurrency(mock_update_gfile, mock_notify_change):
     Test to ensure that concurrent calls to update_status are handled correctly.
     """
     tracker = WorkflowTracker.get_instance()
-    states = [state.name for state in WorkflowStates]
+    states = [state.name for state in WorkflowEnum]
 
     # Simulate concurrent updates by creating a list of tasks
     tasks = [
@@ -99,7 +99,7 @@ async def test_update_status_store_operation_error_handling(mock_update_gfile, m
     mock_update_gfile.side_effect = Exception("Simulated storage error")
 
     tracker = WorkflowTracker.get_instance()
-    state = WorkflowStates.DOWNLOAD_COMPLETE.name
+    state = WorkflowEnum.DOWNLOAD_COMPLETE.name
     comment = "Download complete for workflow ID {id}."
     gdrive_id = "some-gdrive-id"
 
@@ -153,6 +153,3 @@ async def test_update_status_edge_cases(mock_update_gfile, mock_notify_change):
 
         # Additional assertions can be added here to verify the state of the tracker
         # after handling edge case parameters, if applicable.
-
-
-

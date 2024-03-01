@@ -26,7 +26,7 @@ async def setup_workflow_tracker():
 async def test_transcribe_logs_start_state(setup_audio_transcriber, setup_workflow_tracker, mock_transcribe_mp3, caplog):
     # Execute the transcribe method which should trigger logging through update_status
     await setup_audio_transcriber.transcribe("input_file", "audio_quality", "compute_type")
-    
+
     # Verify that the correct states are logged
     assert "START" in caplog.text
     assert "TRANSCRIPTION_STARTING" in caplog.text
@@ -39,7 +39,7 @@ async def test_transcribe_logs_start_state(setup_audio_transcriber, setup_workfl
 import pytest
 import json
 from audio_transcriber_code import AudioTranscriber, GDriveInput
-from workflow_states_code import WorkflowStates
+from workflow_states_code import WorkflowEnum
 
 @pytest.fixture
 def mock_verify_and_prepare_mp3_failure(mocker):
@@ -67,10 +67,10 @@ async def test_start_state_failure(audio_transcriber_fixture, mock_verify_and_pr
 
     with pytest.raises(Exception) as exc_info:
         await audio_transcriber_fixture.transcribe(input_file, "medium", "float32")
-    
+
     assert "MP3 preparation failed" in str(exc_info.value)
     # Check that the "flow_state" in one of the log messages matches the expected state
-    assert any(json.loads(record.message)["flow_state"] == WorkflowStates.START.state_identifier for record in caplog.records)
+    assert any(json.loads(record.message)["flow_state"] == WorkflowEnum.START.state_identifier for record in caplog.records)
 
 @pytest.mark.asyncio
 async def test_transcript_starting_state_failure(audio_transcriber_fixture,mock_verify_and_prepare_mp3_success, mock_transcribe_mp3_failure, caplog):
@@ -78,7 +78,7 @@ async def test_transcript_starting_state_failure(audio_transcriber_fixture,mock_
 
     with pytest.raises(Exception) as exc_info:
         await audio_transcriber_fixture.transcribe(input_file, "medium", "float32")
-    
+
     assert "MP3 transcribing failed" in str(exc_info.value)
     # Check that the "flow_state" in one of the log messages matches the expected state
-    assert any(json.loads(record.message)["flow_state"] == WorkflowStates.TRANSCRIPTION_STARTING.state_identifier for record in caplog.records)
+    assert any(json.loads(record.message)["flow_state"] == WorkflowEnum.TRANSCRIPTION_STARTING.state_identifier for record in caplog.records)
