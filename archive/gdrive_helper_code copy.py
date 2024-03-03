@@ -6,7 +6,7 @@ from workflow_states_code import WorkflowEnum
 from workflow_tracker_code import WorkflowTracker
 from env_settings_code import get_settings
 from logger_code import LoggerBase
-from misc_utils import async_error_handler
+from misc_utils import async_error_handler, update_status
 import asyncio
 import json
 from googleapiclient.errors import HttpError
@@ -145,7 +145,7 @@ class GDriveHelper:
             # returns the gfile id of the transcription file. We will add this to the next update_status so we are tracking within the
             # mp3 file where the corresponding transcript file is located (by gfile id).
             transcription_gfile_id = await self.upload(GDriveInput(gdrive_id=folder_gdrive_id),local_transcript_file_path)
-            await self.tracker.update_status(state=WorkflowEnum.TRANSCRIPTION_UPLOAD_COMPLETE, comment='Adding the transcription gfile tracker id', transcript_gdriveid= transcription_gfile_id, store=True)
+            await update_status(state=WorkflowEnum.TRANSCRIPTION_UPLOAD_COMPLETE, comment='Adding the transcription gfile tracker id', transcript_gdriveid= transcription_gfile_id, store=True)
 
     @async_error_handler(status=WorkflowEnum.ERROR,error_message = 'Could not upload the transcript to gdrive transcript folder.')
     async def upload(self, folder_gdrive_input:GDriveInput, file_path: ValidPath) -> GDriveInput:

@@ -2,12 +2,11 @@
 import traceback
 from functools import wraps
 
-from workflow_states_code import WorkflowStates, WorkflowEnum
+from workflow_states_code import WorkflowStates
 from logger_code import LoggerBase
 
 
 async def handle_error(status:WorkflowStates, error_message: str=None, operation=None, raise_exception=True):
-    from misc_utils import update_status
     logger = LoggerBase.setup_logger('handle_error')
     # Dynamically construct parts of the message based on non-None values
     parts = [
@@ -21,7 +20,7 @@ async def handle_error(status:WorkflowStates, error_message: str=None, operation
         exception_message = err_msg
         raise Exception(exception_message)
 
-def async_error_handler(status:WorkflowStates, error_message=None, store=False, raise_exception=True):
+def async_error_handler(status:WorkflowStates, error_message=None, raise_exception=True):
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):

@@ -4,16 +4,16 @@ from pydantic import BaseModel, field_validator
 
 
 class WorkflowEnum(Enum):
-    START = ("start", "Workflow initiated")
-    TRANSCRIPTION_STARTING = ("transcription_starting", "Transcription process starting")
-    LOADING_MODEL = ("loading whisper model","loading whisper model")
-    TRANSCRIBING = ("transcribing","transcribing")
-    TRANSCRIPTION_FAILED = ("transcription_failed", "Transcription failed")
-    TRANSCRIPTION_COMPLETE = ("transcription_complete", "Transcription completed successfully")
-    TRANSCRIPTION_UPLOAD_STARTING = ("transcription upload starting", "Transcription file upload starting")
-    TRANSCRIPTION_UPLOAD_COMPLETE = ("transcription upload complete", "Transcription file uploaded")
-    ERROR = ("error", "An error occurred in the workflow")
-    UNKNOWN = ("unknown", "unknown")
+    START = "start"
+    MP3_UPLOADED = "mp3_uploaded"
+    MP3_DOWNLOADED = "mp3_downloaded"
+    TRANSCRIPTION_STARTING = "transcription_starting"
+    TRANSCRIBING = "transcribing","transcribing"
+    TRANSCRIPTION_FAILED = "transcription_failed"
+    TRANSCRIPTION_COMPLETE = "transcription_complete"
+    TRANSCRIPTION_UPLOAD_STARTING = "transcription upload starting"
+    TRANSCRIPTION_UPLOAD_COMPLETE = "transcription upload complete"
+    ERROR = "error"
 
     @classmethod
     def match_value(cls, value):
@@ -25,12 +25,13 @@ class WorkflowStates(BaseModel):
 
     status: WorkflowEnum
 
+    # model_config = ConfigDict(use_enum_values=True)
     @field_validator("status")
     @classmethod
     def validate_status(cls, v):
         if not isinstance(v, WorkflowEnum):
             raise ValueError("status must be a member of the WorkflowEnums")
-        return v
+        return v.name
 
     @classmethod
     def validate_state(cls,v):

@@ -7,13 +7,10 @@ from threading import Lock
 import json
 
 from logger_code import LoggerBase  # Adjust this import as necessary
-from workflow_status_model import WorkflowStatusModel  # Adjust this import as necessary
 from workflow_states_code import WorkflowStates  # Adjust this import as necessary
 from gdrive_helper_code import GDriveHelper
-from workflow_error_code import async_error_handler, handle_error
-
-
-
+from workflow_error_code import async_error_handler
+from pydantic_models import GDriveInput
 
 class WorkflowException(Exception):
     def __init__(self, status=WorkflowStates.ERROR, error_message=None, store=False, raise_exception=True, update_status=True):
@@ -46,7 +43,6 @@ class WorkflowTracker:
 
     def __init__(self):
         if not hasattr(self, 'initialized'):
-            self.workflow_status_model = WorkflowStatusModel()
             self.initialized = True
             self.event_tracker = asyncio.Event()
             self.logger = LoggerBase.setup_logger('WorkflowTracker')
@@ -95,56 +91,3 @@ class WorkflowTracker:
 
         # Log the message with the state count appended
         self.logger.flow(json.dumps(log_message))
-
-    @async_error_handler(status=WorkflowStates.ERROR)
-    async def update_status(
-    self,
-    state: Enum = None,
-    comment: Optional[str] = None,
-    transcript_gdriveid: Optional[str] = None,
-    store: Optional[bool] = None,
-    ):
-        async def _validate_state():
-            if not isinstance(state, WorkflowStates):
-                return False
-            return True
-
-        is_valid = await _validate_state()
-        msg = "A call was made to update_status. "
-        if not is_valid:
-            self.logger.debug(msg + f"Check of a valid state: {state.name} did not pass.  Returning.")
-            return  # Exit the method early if the state is not valid
-        self.logger.debug(msg + f"Check of a valid state passed in: {state.name}.")
-        self._log_flow_state(state, comment)
-        # Proceed with updating the status only if the state is valid
-        self.workflow_status_model.status = state.name
-        self.workflow_status_model.comment = comment
-        self.workflow_status_model.transcript_gdrive_id = transcript_gdriveid
-
-        if store:
-            if not self._mp3_gfile_id:
-                await handle_error(status=WorkflowStates.ERROR,error_message='Option was to store the status. However, the mp3_file_id property is not set.',operation="update_status",raise_exception=False)
-            await self.gh.update_transcription_status_in_mp3_gfile(self._mp3_gfile_id)
-        await self._notify_status_change()
-
-    async def _notify_status_change(self):
-        # self.event_tracker.set()
-        # await asyncio.sleep(0.1)  # Simulation of an asynchronous operation
-        # self.event_tracker.clear()
-        # self.logger.info(f"Status changed to {self.workflow_status.status}")
-        pass
-
-    @async_error_handler(status=WorkflowStates.ERROR)
-    async def update_transcription_status_in_mp3_gfile(self, gfile_input: GDriveInput, transcription_info_dict:dict) -> None:
-        loop = asyncio.get_running_loop()
-        def _update_transcription_status():
-            gfile_id = gfile_input.gdrive_id
-            from gdrive_helper_code import GDriveHelper
-            file_to_update = self.drive.CreateFile({'id': gfile_id})
-            # Take dictionary and make a json string with json.dumps()
-            transcription_info_json = json.dumps(transcription_info_dict)
-            # The transcription (workflow) status is placed as a json string within the gfile's description field.
-            # This is not ideal, but using labels proved to be way too difficult?
-            file_to_update['description'] = transcription_info_json
-            file_to_update.Upload()
-        await loop.run_in_executor(None, _update_transcription_status)
