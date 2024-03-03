@@ -8,7 +8,7 @@ from workflow_tracker_code import WorkflowTracker
 
 error_state = WorkflowStates(status=WorkflowEnum.ERROR)
 
-@async_error_handler(status=error_state)
+@async_error_handler()
 async def update_status():
 # state: WorkflowStates,
 # comment: Optional[str] = None,

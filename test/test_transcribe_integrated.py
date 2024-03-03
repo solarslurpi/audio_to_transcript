@@ -6,10 +6,8 @@ from fastapi import UploadFile
 
 from audio_transcriber_code import AudioTranscriber
 from gdrive_helper_code import GDriveHelper
-from workflow_states_code import WorkflowEnum
-from workflow_tracker_code import TranscriptionModel
-from misc_utils import update_status
-from pydantic_models import  GDriveInput, TranscriptText
+from workflow_tracker_code import TranscriptionModel, WorkflowTracker
+from pydantic_models import  GDriveInput
 
 
 @pytest.fixture
@@ -39,6 +37,19 @@ def valid_UploadFile(valid_mp3_path):
     num_valid_mp3_bytes = valid_mp3_path.stat().st_size
     assert num_upload_bytes == num_valid_mp3_bytes
     return upload_file
+
+@pytest.fixture
+def init_WorkflowTracker_mp3(valid_mp3_gdrive_id,valid_mp3_path):
+    WorkflowTracker.update(
+    transcript_audio_quality= "medium",
+    transcript_compute_type= "float16",
+    local_mp3_path=valid_mp3_path,
+    input_mp3 = GDriveInput(gdrive_id=valid_mp3_gdrive_id)
+
+    )
+    print(f"WorkflowTrackerModel: {WorkflowTracker.get_model().model_dump_json(indent = 4)}")
+    print(f"/n-----> input_mp3 type: {type(WorkflowTracker.get('input_mp3'))}")
+    return
 
 def valid_transcription_options(input_file,local_mp3_path=None):
     transcription_options = TranscriptionModel(
@@ -107,25 +118,19 @@ async def test_copy_gfile_to_local_mp3_path(valid_mp3_gdrive_input):
     _run_asserts_for_local_mp3_path(mp3_gdrive_id, local_mp3_path)
 
 @pytest.mark.asyncio
-async def test_mp3_to_text_success(valid_mp3_path, valid_mp3_gdrive_id) :
+async def test_mp3_to_text_success(init_WorkflowTracker_mp3) : # pylint: disable=unused-argument
     transcriber = AudioTranscriber()
-    transcription_options = TranscriptionModel(
-        transcript_audio_quality ='medium',  # Assuming 'high' is a valid key in AUDIO_QUALITY_DICT
-        transcript_compute_type='float16',    # Assuming 'gpu' is a valid key in COMPUTE_TYPE_MAP
-        local_mp3_path=valid_mp3_path,  # Replace with an actual file path
-        mp3_gdrive_id=valid_mp3_gdrive_id
-    )
-    transcription_text = await transcriber.transcribe_mp3(transcription_options)
+    transcription_text = await transcriber.transcribe_mp3()
     assert transcription_text is not None, "Transcription result should not be None"
     min_char_count = 100  # Example minimum character count
     assert len(transcription_text) >= min_char_count, f"Transcription text should contain at least {min_char_count} characters."
     assert isinstance(transcription_text, str), "Transcription result should be a string"
     assert len(transcription_text) > 0, "Transcription result should not be empty"
 
-async def run_transcription_test_success(options:TranscriptionModel):
+async def run_transcription_test_success():
     """Helper function to run the transcription test and perform common assertions."""
     transcriber = AudioTranscriber()
-    transcription_text = await transcriber.transcribe(options)
+    transcription_text = await transcriber.transcribe()
 
     assert transcription_text is not None, "Transcription result should not be None"
     min_char_count = 100  # Example minimum character count
@@ -135,35 +140,12 @@ async def run_transcription_test_success(options:TranscriptionModel):
 
 
 @pytest.mark.asyncio
-async def test_audio_transcription_workflow_mp3_upload_success(uploadFile_transcription_options):
+async def test_audio_transcription_workflow_mp3_upload_success(init_WorkflowTracker_mp3): # pylint: disable=unused-argument
     """Test full transcription process for an UploadFile input."""
-    await run_transcription_test_success(uploadFile_transcription_options)
+    await run_transcription_test_success()
 
 @pytest.mark.asyncio
-async def test_audio_transcription_workflow_mp3_gdrive_success(mp3_transcription_options):
+async def test_audio_transcription_workflow_mp3_gdrive_success(init_WorkflowTracker_mp3):
     """Test full transcription process for a Google Drive file ID input."""
-    await run_transcription_test_success(mp3_transcription_options)
 
-@pytest.mark.asyncio
-async def test_update_status_success():
-    await update_status(WorkflowEnum.ERROR, comment="In pytest, testing update_status")
-
-
-
-@pytest.mark.asyncio
-async def test_update_status_failure():
-    # Call update_status with an invalid state (e.g., not an Enum value)
-    with pytest.raises(Exception):
-        await update_status("invalid_state")
-
-# TODO
-@pytest.mark.asyncio
-async def test_upload_transcript_to_gdrive(valid_mp3_gdrive_id) -> None:
-    transcript_text = "This is test transcript text to validate that upload_transcript_to_gdrive is working."
-    gdrive_input = GDriveInput(gdrive_id=valid_mp3_gdrive_id)
-    transcript_text_pydantic = TranscriptText(text=transcript_text)
-
-    # transcription_status_dict = await gh.fetch_transcription_status_dict(input_source.gdrive_id if isinstance(input_source, GDriveInput) else transcriber.tracker.mp3_gfile_id)
-    # assert transcription_status_dict['state'] == WorkflowEnum.TRANSCRIPTION_UPLOAD_COMPLETE.name
-    # assert transcription_status_dict['transcriptionId'], "Transcription ID should not be empty"
-    # assert len(transcription_status_dict['transcriptionId']) > 20, "Transcription ID seems too short"
+    await run_transcription_test_success()

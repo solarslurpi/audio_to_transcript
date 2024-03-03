@@ -42,11 +42,11 @@ class GDriveHelper:
         return gauth
 
 
-    @async_error_handler(status=WorkflowEnum.ERROR)
+    @async_error_handler()
     async def log_status(self) -> None:
         able_to_store_state = False
         if WorkflowTracker.get('mp3_gfile_id'):
-            self.update_transcription_status_in_mp3_gfile()
+            await self.update_transcription_status_in_mp3_gfile()
             able_to_store_state = True
         log_message = WorkflowTracker.get_model().model_dump_json(indent=4)
         state_message = f"\n-------------\nstate stored: {able_to_store_state}"
@@ -54,7 +54,7 @@ class GDriveHelper:
         full_log_message = f"{log_message}\n{state_message}"
         self.logger.flow(full_log_message)
 
-    @async_error_handler(status=WorkflowEnum.ERROR)
+    @async_error_handler()
     async def update_transcription_status_in_mp3_gfile(self) -> bool:
         loop = asyncio.get_running_loop()
         def _update_transcription_status():
@@ -70,9 +70,9 @@ class GDriveHelper:
             return True
 
         if not await loop.run_in_executor(None, _update_transcription_status):
-            await handle_error(WorkflowEnum.ERROR,error_message='There was no mp3 gfile id in WorkflowTracker.  Status info is stored within the description field of the mp3 file.',operation='update_transcription_status_in_mp3_gfile', raise_exception=False)
+            await handle_error(error_message='There was no mp3 gfile id in WorkflowTracker.  Status info is stored within the description field of the mp3 file.',operation='update_transcription_status_in_mp3_gfile', raise_exception=False)
         return True
-    @async_error_handler(status=WorkflowEnum.ERROR)
+    @async_error_handler()
     async def upload_mp3_to_gdrive(self, mp3_file_path:Path) -> GDriveInput:
         """
         Asynchronously uploads an MP3 file to Google Drive.
@@ -95,7 +95,7 @@ class GDriveHelper:
         gfile_id = await self.upload(GDriveInput(gdrive_id=folder_gdrive_id), mp3_file_path)
         return gfile_id
 
-    @async_error_handler(status=WorkflowEnum.ERROR,error_message = 'Could not upload the transcript to a gflie.')
+    @async_error_handler(error_message = 'Could not upload the transcript to a gflie.')
     async def upload_transcript_to_gdrive(self,  transcript_text: TranscriptText) -> None:
         mp3_gfile_id = WorkflowTracker.get('mp3_gfile_id')
         mp3_gfile_input = GDriveInput(gdrive_id=mp3_gfile_id)
@@ -117,7 +117,7 @@ class GDriveHelper:
         await update_status()
         return transcription_gfile_id,txt_filename
 
-    @async_error_handler(status=WorkflowEnum.ERROR,error_message = 'Could not upload the transcript to gdrive transcript folder.')
+    @async_error_handler(error_message = 'Could not upload the transcript to gdrive transcript folder.')
     async def upload(self, folder_gdrive_input:GDriveInput, file_path: Path) -> GDriveInput:
         def _upload():
             folder_gdrive_id = folder_gdrive_input.gdrive_id
@@ -136,7 +136,7 @@ class GDriveHelper:
         gfile_id = await loop.run_in_executor(None, _upload)
         return gfile_id
 
-    @async_error_handler(status=WorkflowEnum.ERROR,error_message = 'Could not download_from_gdrive.')
+    @async_error_handler(error_message = 'Could not download_from_gdrive.')
     async def download_from_gdrive(self, gdrive_input:GDriveInput, directory: str):
         loop = asyncio.get_running_loop()
         def _download():
@@ -149,7 +149,7 @@ class GDriveHelper:
         local_file_path = await loop.run_in_executor(None, _download)
         return local_file_path
 
-    @async_error_handler(status=WorkflowEnum.ERROR,error_message = 'Could not get the filename of the gfile.')
+    @async_error_handler(error_message = 'Could not get the filename of the gfile.')
     async def get_filename(self, gfile_input:GDriveInput) -> str:
         gfile_id = gfile_input.gdrive_id
         loop = asyncio.get_running_loop()
@@ -163,7 +163,7 @@ class GDriveHelper:
         verified_filename = MP3filename(filename=filename)
         return verified_filename.filename
 
-    @async_error_handler(status=WorkflowEnum.ERROR,error_message = 'Could not fetch the transcription status from the description field of the gfile.')
+    @async_error_handler(error_message = 'Could not fetch the transcription status from the description field of the gfile.')
     async def get_status_dict(self, gdrive_input: GDriveInput) -> Union[dict, None]:
         gfile_id = gdrive_input.gdrive_id
         loop = asyncio.get_running_loop()

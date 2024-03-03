@@ -108,7 +108,7 @@ class GDriveHelper:
             self.logger.error(f"Error deleting Google Drive file: {e}")
             raise GDriveFileOperationError(operation='delete', detail=file_id, system_error=e)
 
-    @async_error_handler(status=WorkflowEnum.ERROR)
+    @async_error_handler()
     async def upload_mp3_to_gdrive(self, mp3_file_path:ValidPath) -> GDriveInput:
         """
         Asynchronously uploads an MP3 file to Google Drive.

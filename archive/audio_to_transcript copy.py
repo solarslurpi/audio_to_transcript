@@ -63,7 +63,7 @@ class AudioToTranscript:
             temp_file_path = await self._get_verified_mp3_file(input_file)
             return await self._transcribe_and_upload(temp_file_path, audio_quality, compute_type)
         except Exception as e:
-            await handle_error(status=WorkflowStates.TRANSCRIPTION_FAILED, error_message=f"{e}", operation="transcribe")
+            await handle_error( error_message=f"{e}", operation="transcribe")
 
     async def _get_verified_mp3_file(self, input_file: Union[UploadFile, GDriveInput]) -> str:
         # Pydantic input validation makes sure we either have a file or a GDrive ID.
@@ -106,7 +106,7 @@ class AudioToTranscript:
         self.tracker.workflow_status_model.transcription_gdrive_id = await gh.upload_to_gdrive(folder_GdriveID=transcript_folder_gdriveID,file_path=local_file_path)
         self.logger.debug("Transcript is done uploading.")
         await self.tracker.update_status(state=WorkflowStates.TRANSCRIPTION_UPLOAD_COMPLETE, comment='Transcript has completed.', transcript_gdriveid= transcript_folder_gdriveID, store=True)
- 
+
     async def _save_transcription_to_file(self, transcription_text, local_file_path):
         """
         Saves the transcription text to a local file asynchronously.
@@ -145,7 +145,7 @@ class AudioToTranscript:
             return transcription_text
         except Exception as e:
             await handle_error(error_message=f"Transcription failed: {e}")
-    
+
 
 
 
@@ -168,7 +168,7 @@ class AudioToTranscript:
             await handle_error(status=WorkflowStates.TRANSCRIPTION_FAILED, error_message=str(e), operation="_transcribe_mp3_file")
 
 
- 
+
     async def _copy_uploaded_file_to_temp_file(self, temp_dir: str, file: UploadFile) -> str:
         try:
             temp_file_path = os.path.join(temp_dir, file.filename)
@@ -185,5 +185,3 @@ class AudioToTranscript:
         except Exception as e:
             await handle_error(status=WorkflowStates.TRANSCRIPTION_FAILED, error_message=f"{e}", operation="copy_file_with_GDrive_ID_to_temp_file")
         return temp_file_path
-    
-

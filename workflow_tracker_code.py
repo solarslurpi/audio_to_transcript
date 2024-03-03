@@ -66,7 +66,6 @@ class BaseTrackerModel(BaseModel):
 
 class TranscriptionModel(BaseTrackerModel):
     local_mp3_path: Union[Path, None] = None
-    mp3_id_transcript: Optional[str] = None
 
     @field_serializer('local_mp3_path')
     def serialize_local_mp3_path(self, local_mp3_path: Path):
@@ -101,7 +100,7 @@ class TranscriptionModel(BaseTrackerModel):
 
         return v
 
-class WorkflowTrackerModel(BaseTrackerModel):
+class WorkflowTrackerModel(TranscriptionModel):
     mp3_gfile_id: Optional[str] = None
     status: str = None
     comment: Optional[str] = None
@@ -146,9 +145,11 @@ class WorkflowTracker:
             just_basetracker_attribs_instance = BaseTrackerModel(
                 **source_instance.model_dump()
             )
-            for attr_name, value in just_basetracker_attribs_instance.model_dump().items():
+            cls._logger.info(f"input_mp3 type before: {type(cls._model.input_mp3)}")
+            for attr_name, _ in just_basetracker_attribs_instance:
                 if hasattr(cls._model, attr_name):
-                    setattr(cls._model, attr_name, value)
+                    setattr(cls._model, attr_name, getattr(just_basetracker_attribs_instance, attr_name))
+                    cls._logger.info(f"input_mp3 type after: {type(cls._model.input_mp3)}")
 
 
             # Update the class's _model instance

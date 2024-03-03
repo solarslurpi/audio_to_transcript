@@ -9,7 +9,7 @@ logging.addLevelName(FLOW_LEVEL_NUM, "FLOW")
 def flow(self, message, *args, **kwargs):
     # Utility method for logging messages at the custom FLOW level
     if self.isEnabledFor(FLOW_LEVEL_NUM):
-        self._log(FLOW_LEVEL_NUM, message, args, **kwargs)
+        self._log(FLOW_LEVEL_NUM, message, args, **kwargs) # pylint: disable=protected-access
 
 logging.Logger.flow = flow
 class CustomFormatter(colorlog.ColoredFormatter):

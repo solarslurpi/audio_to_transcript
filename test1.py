@@ -1,33 +1,39 @@
-from io import BytesIO
-from pathlib import Path
 
-from fastapi.encoders import jsonable_encoder
-from fastapi import UploadFile
+from workflow_tracker_code import WorkflowTracker, BaseTrackerModel, WorkflowTrackerModel
+from workflow_states_code  import WorkflowEnum
+from pydantic_models import GDriveInput
 
-from workflow_tracker_code import WorkflowTracker
-def valid_mp3_path():
-    windows_file_path = r'C:\Users\happy\Documents\Projects\audio_to_transcript\test\test.mp3'
-    return Path(windows_file_path)
 
-def valid_UploadFile(valid_mp3_path):
-    file_content = valid_mp3_path.read_bytes()
-    # Create a BytesIO object from the binary content
-    file_like = BytesIO(file_content)
-    # Create an UploadFile object. The filename and content_type can be adjusted as needed.
-    upload_file = UploadFile(filename=valid_mp3_path.name, file=file_like)
-        # Display the number of bytes in the original file
-    upload_file.file.seek(0) # rewrind to beginning
-    num_upload_bytes = len(upload_file.file.read()) # read to the end
-    upload_file.file.seek(0) # rewind the file for the next reader.
-    num_valid_mp3_bytes = valid_mp3_path.stat().st_size
-    assert num_upload_bytes == num_valid_mp3_bytes
-    return upload_file
+def valid_mp3_gdrive_input():
+    return GDriveInput(gdrive_id='1ukjAXeITUyJ606Y62mho3XOMnsq-tfu5')
 
-upload_file = valid_UploadFile(valid_mp3_path())
+WorkflowTracker.update(
+status=WorkflowEnum.START.name,
+comment= 'adding a comment',
+)
+print(f"\n----\nWorkflowTrackerModel: {WorkflowTracker.get_model()}")
+base_tracker_instance = BaseTrackerModel(transcript_audio_quality="medium",transcript_compute_type="float16",input_mp3=valid_mp3_gdrive_input())
+print(f"\n----\nbase_tracker_instance: {base_tracker_instance}")
+mod_wftm = WorkflowTrackerModel(status=WorkflowEnum.START.name,comment= 'adding a comment')
+print(f"\n----\nmod_wftm: {mod_wftm}")
+mod_wftm = base_tracker_instance.model_copy()
+print(f"\n----\nmod_wftm: {mod_wftm}")
+print(mod_wftm)
 
-json_item = jsonable_encoder(upload_file)
-print(json_item)
-# WorkflowTracker.update(status="start",
-#                        comment="Starting the transcription workflow.",
-#                        upload_file=upload_file
-#                       )
+
+# class FooBarModel(BaseModel):
+#     banana: float
+#     foo: str
+#     bar: BarModel
+
+
+# m = FooBarModel(banana=3.14, foo='hello', bar={'whatever': 123})
+# v = m.model_copy(update={'banana': 0})
+# print(m.model_copy(update={'banana': 0}))
+# #> banana=0 foo='hello' bar=BarModel(whatever=123)
+# print(id(m.bar) == id(m.model_copy().bar))
+# #> True
+# # normal copy gives the same object reference for bar
+# print(id(m.bar) == id(m.model_copy(deep=True).bar))
+# #> False
+# # deep copy gives a new object reference for `bar`
