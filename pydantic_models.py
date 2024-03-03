@@ -1,9 +1,10 @@
 import os
-from typing import Union
+from typing import Union, Optional
 
 from pydantic import BaseModel, field_validator, Field
-
 from fastapi import UploadFile
+
+from workflow_states_code import WorkflowEnum
 
 
 
@@ -74,3 +75,12 @@ class MP3filename(BaseModel):
         if not FilenameLengthChecker.is_right_length(v):
             raise ValueError(f"The file length is not between {FilenameLengthChecker.MIN_LENGTH} and {FilenameLengthChecker.MAX_LENGTH} .")
         return v
+
+class StatusModel(BaseModel):
+    transcript_audio_quality: Optional[str] = "medium"
+    transcript_compute_type: Optional[str] = "float16"
+    mp3_gfile_id: Optional[str] = None
+    status: str = WorkflowEnum.NOT_STARTED.name
+    comment: Optional[str] = None
+    transcript_gdrive_id: Optional[str] = None
+    transcript_gdrive_filename: Optional[str] = None

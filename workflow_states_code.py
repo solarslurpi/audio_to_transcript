@@ -4,6 +4,7 @@ from pydantic import BaseModel, field_validator
 
 
 class WorkflowEnum(Enum):
+    NOT_STARTED = "not started"
     START = "start"
     MP3_UPLOADED = "mp3_uploaded"
     MP3_DOWNLOADED = "mp3_downloaded"

@@ -29,6 +29,7 @@ AUDIO_QUALITY_MAP = {
 }
 
 COMPUTE_TYPE_MAP = {
+    "default": torch.float16,
     "float16": torch.float16,
     "float32": torch.float32,
 }

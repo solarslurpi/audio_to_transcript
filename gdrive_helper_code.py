@@ -4,6 +4,7 @@ import json
 from typing import Union
 
 import aiofiles
+from pydantic import ValidationError
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 
@@ -13,7 +14,7 @@ from env_settings_code import get_settings
 from logger_code import LoggerBase
 from misc_utils import async_error_handler,update_status
 from workflow_error_code import handle_error
-from pydantic_models import GDriveInput, TranscriptText, MP3filename
+from pydantic_models import GDriveInput, TranscriptText, MP3filename, StatusModel
 
 
 
@@ -144,6 +145,7 @@ class GDriveHelper:
             gfile.FetchMetadata(fields="title")
             filename = gfile['title']
             local_file_path = Path(directory) / filename
+            gfile.GetContentFile(str(local_file_path))
             return local_file_path
 
         local_file_path = await loop.run_in_executor(None, _download)
@@ -164,16 +166,57 @@ class GDriveHelper:
         return verified_filename.filename
 
     @async_error_handler(error_message = 'Could not fetch the transcription status from the description field of the gfile.')
-    async def get_status_dict(self, gdrive_input: GDriveInput) -> Union[dict, None]:
+    async def get_status_model(self, gdrive_input: GDriveInput) -> Union[dict, None]:
         gfile_id = gdrive_input.gdrive_id
         loop = asyncio.get_running_loop()
 
-        def _get_transcription_status_dict() -> Union[dict, None]:
+        def _get_status_model() -> Union[dict, None]:
             gfile = self.drive.CreateFile({'id': gfile_id})
             gfile.FetchMetadata(fields="description")
-            transcription_status_json = gfile['description']
-            return json.loads(transcription_status_json) if transcription_status_json else None
+            try:
+                transcription_status_json = gfile['description']
+            except KeyError:
+                status_model = StatusModel()
+                transcription_status_json = status_model.model_dump_json()
+                gfile['description'] = transcription_status_json
+                gfile.Upload()
 
-        transcription_status_dict = await loop.run_in_executor(None, _get_transcription_status_dict)
+            transcription_status_dict = json.loads(transcription_status_json)
+            try:
+                status_model = StatusModel.model_validate(transcription_status_dict)
+            except ValidationError as e:
+                self.logger.error(f"{e}")
+                status_model = StatusModel(status=WorkflowEnum.NOT_STARTED.name)
+            return status_model
+
+        transcription_status_dict = await loop.run_in_executor(None, _get_status_model)
         self.logger.debug(f"The transcription status dict is {transcription_status_dict} for gfile_id: {gfile_id}")
         return transcription_status_dict
+
+    @async_error_handler(error_message = 'Could not get a list of mp3 files from the GDrive ID.')
+    async def list_files_to_transcribe(self, gdrive_folder_id: str) -> list:
+        loop = asyncio.get_running_loop()
+        def _get_file_info():
+            # Assuming get_gfile_state is properly defined as an async function
+            gfiles_to_transcribe_list = []
+            query = f"'{gdrive_folder_id}' in parents and trashed=false"
+            file_list = self.drive.ListFile({'q': query}).GetList()
+            for file in file_list:
+                gfiles_to_transcribe_list.append(file)
+            return gfiles_to_transcribe_list
+        gfiles_to_transcribe_list = await loop.run_in_executor(None, _get_file_info)
+        return gfiles_to_transcribe_list
+
+    @async_error_handler(error_message = 'Error attempting to delete and mp3 gfile.')
+    async def delete_file(self, file_id: str):
+        file = self.drive.CreateFile({'id': file_id})
+        file.Delete()
+
+    @async_error_handler(error_message = 'Error attempting to delete and mp3 gfile.')
+    async def reset_status_model(self, gdrive_input:GDriveInput):
+        gfile_id = gdrive_input.gdrive_id
+        gfile = self.drive.CreateFile({'id': gfile_id})
+        status_model = StatusModel()
+        status_model_json = status_model.model_dump_json()
+        gfile['description'] = status_model_json
+        gfile.Upload()
