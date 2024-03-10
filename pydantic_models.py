@@ -1,7 +1,8 @@
 import os
-from typing import Union, Optional
+import re
+from typing import Union
 
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, field_validator, Field, HttpUrl
 from fastapi import UploadFile
 
 from workflow_states_code import WorkflowEnum
@@ -77,10 +78,24 @@ class MP3filename(BaseModel):
         return v
 
 class StatusModel(BaseModel):
-    transcript_audio_quality: Optional[str] = "medium"
-    transcript_compute_type: Optional[str] = "float16"
-    mp3_gfile_id: Optional[str] = None
+    transcript_audio_quality: str = "medium"
+    transcript_compute_type: str = "float16"
+    mp3_gfile_id: str | None = None
     status: str = WorkflowEnum.NOT_STARTED.name
-    comment: Optional[str] = None
-    transcript_gdrive_id: Optional[str] = None
-    transcript_gdrive_filename: Optional[str] = None
+    comment: str | None = None
+    transcript_gdrive_id: str | None = None
+    transcript_gdrive_filename: str | None = None
+
+class YouTubeUrl(BaseModel):
+    yt_url: str
+
+    @field_validator('yt_url')
+    @classmethod
+    def validate_youtube_url(cls, v):
+        youtube_regex = (
+            r'(https?://)?(www\.)?'
+            '(youtube|youtu|youtube-nocookie)\.(com|be)/'
+            '(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})')
+        if not re.match(youtube_regex, v):
+            raise ValueError('Invalid YouTube URL')
+        return v

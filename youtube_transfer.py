@@ -1,15 +1,14 @@
 import asyncio
 import os
 import re
-from logger_code import LoggerBase
-
 # yt_dlp is a fork of youtube-dl that has stayed current with the latest YouTube isms.  Youtube-dl is no longer
 # supported so use yt_dlp.  It is more feature rich and up-to-date.
 import yt_dlp as youtube_dl
 
+from logger_code import LoggerBase
+
 
 class YouTubeTransfer():
-    directory = "./temp_mp3s"
     # Define a mapping of return codes to messages used by the YouTube download module.
     ret_code_messages = {
         0: "Successfully downloaded.",
@@ -21,13 +20,10 @@ class YouTubeTransfer():
         -2: "Exception occured. Error:{} "
     }
     def __init__(self):
-        self.logger = LoggerBase.setup_logger()
-        self.tracker = None #TODO
+        self.logger = LoggerBase.setup_logger('YouTubeDwnLdToGDriveMp3')
 
     async def download_youtube_audio(self, youtube_url: str):
-        self.tracker.task_status.youtube_url = youtube_url
-        self.tracker.task_status.workflow_status = WorkflowStatus.DOWNLOAD_STARTING
-        self.tracker.update_task_status()
+        self.youtube_url = youtube_url
         if not os.path.exists(self.directory):
             os.makedirs(self.directory)
         # The _hook function defined within adownload_youtube_audio is a closure that captures the downloaded_file_path variable. This function is executed by yt-dlp when the download is finished, and it updates downloaded_file_path with the actual path of the downloaded file.
@@ -52,7 +48,7 @@ class YouTubeTransfer():
             with youtube_dl.YoutubeDL(ydl_opts) as ydl:
                 ret_code = ydl.download([youtube_url])
                 return ret_code
-                
+
         ret_code = await loop.run_in_executor(None, download)
         if ret_code != 0:
             error_message = "Download of {youtube_ursl} failed:"+ self.ret_code_messages.get(ret_code, "Unknown error occurred during download.")
@@ -66,7 +62,7 @@ class YouTubeTransfer():
         if response['status'] == 'finished':
             self.logger.debug(f"Done downloading.  The current file is {response['filename']}, now post-processing ...")
             original_path = response['filename']
-            # # This status comes in from yt-dl before postprocessing.  
+            # # This status comes in from yt-dl before postprocessing.
             # # First, strip the .webm part if it exists
             base_path = original_path.rsplit('.webm', 1)[0]
             filename = os.path.basename(base_path)

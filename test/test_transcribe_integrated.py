@@ -145,7 +145,7 @@ async def test_audio_transcription_workflow_mp3_upload_success(init_WorkflowTrac
     await run_transcription_test_success()
 
 @pytest.mark.asyncio
-async def test_audio_transcription_workflow_mp3_gdrive_success(init_WorkflowTracker_mp3):
+async def test_audio_transcription_workflow_mp3_gdrive_success(init_WorkflowTracker_mp3): # pylint: disable=unused-argument
     """Test full transcription process for a Google Drive file ID input."""
 
     await run_transcription_test_success()
