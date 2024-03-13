@@ -48,7 +48,7 @@ from pydantic_models import (
                              validate_upload_file)
 from workflow_states_code import WorkflowEnum
 from workflow_tracker_code import WorkflowTracker, WorkflowTrackerModel, AUDIO_QUALITY_MAP, COMPUTE_TYPE_MAP
-from misc_utils import update_status
+from update_status import update_status
 from workflow_error_code import async_error_handler
 
 class AudioTranscriber:
@@ -203,8 +203,14 @@ class AudioTranscriber:
         - Exception: Any exception raised during the file saving or uploading process is caught
         and handled by the `async_error_handler` decorator, which sets the workflow status accordingly.
         """
+        local_mp3_dir_path = Path(self.settings.local_mp3_dir)
 
-        local_mp3_file_path = Path(self.settings.local_mp3_dir) / upload_file.filename
+        if not local_mp3_dir_path.exists():
+            # All parent directories should be created if needed. Don't raise an error if the directory
+            # already exists.
+            local_mp3_dir_path.mkdir(parents=True, exist_ok=True)
+        local_mp3_dir_path = self._make_sure_dir_exists(self.settings.local_mp3_dir)
+        local_mp3_file_path = Path(local_mp3_dir_path) / upload_file.filename
         upload_file.file.seek(0)  # Rewind to the start of the file.
         async with aiofiles.open(str(local_mp3_file_path), "wb") as temp_file:
             content = await upload_file.read()
@@ -228,16 +234,24 @@ class AudioTranscriber:
         Returns:
             Tuple[str, Path]: The Google Drive ID and the local file path where the MP3 has been saved.
         """
-        local_mp3_file_path = await self.gh.download_from_gdrive(gdrive_input, self.settings.local_mp3_dir)
+        local_mp3_dir_path = self._make_sure_dir_exists(self.settings.local_mp3_dir)
+        local_mp3_file_path = await self.gh.download_from_gdrive(gdrive_input, local_mp3_dir_path)
         # The gdrive_id and local_file_path are returned so this workflow can be tracked.
         return gdrive_input.gdrive_id, local_mp3_file_path
 
+    def _make_sure_dir_exists(self,dir_path):
+        local_dir_path = Path(dir_path)
+
+        if not local_dir_path.exists():
+            # All parent directories should be created if needed. Don't raise an error if the directory
+            # already exists.
+            local_dir_path.mkdir(parents=True, exist_ok=True)
+        return local_dir_path
 
     @async_error_handler()
     async def transcribe_mp3(self) -> str:
         """
         Transcribes a local MP3 file to text using the Whisper API based on specified options.
-
         Utilizes audio quality and compute type from `options` to tailor the transcription process.
         Updates the workflow tracker to indicate transcription start, relying on a Google Drive file ID if available.
 
@@ -282,9 +296,11 @@ class AudioTranscriber:
         Insight:
         Central to the transcription workflow, this method directly interacts with the transcription model, reflecting the process's start, ongoing status, and completion in the workflow tracker. The choice of model and compute type allows for customizable transcription fidelity and performance.
         """
-        default_audio_quality = AUDIO_QUALITY_MAP.get("default")
-        default_compute_type = COMPUTE_TYPE_MAP.get("default")
-        self.logger.debug(f"Default audio quality: {default_audio_quality} and default compute type: {default_compute_type}")
+        audio_quality_setting = self.settings.audio_quality_default
+        compute_type_setting = self.settings.compute_type_default
+        default_audio_model = AUDIO_QUALITY_MAP.get(audio_quality_setting)
+        default_compute_type = COMPUTE_TYPE_MAP.get(compute_type_setting)
+        self.logger.debug(f"Default audio quality: {default_audio_model} and default compute type: {default_compute_type}")
         audio_quality_text_representation = WorkflowTracker.get('transcript_audio_quality')
         compute_type_text_representation = WorkflowTracker.get('transcript_compute_type')
         hf_model_name = AUDIO_QUALITY_MAP.get(audio_quality_text_representation,default_audio_quality)

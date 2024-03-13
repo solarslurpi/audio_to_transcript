@@ -12,7 +12,7 @@ from workflow_states_code import WorkflowEnum
 from workflow_tracker_code import WorkflowTracker
 from env_settings_code import get_settings
 from logger_code import LoggerBase
-from misc_utils import async_error_handler,update_status
+from update_status import async_error_handler,update_status
 from workflow_error_code import handle_error
 from pydantic_models import GDriveInput, TranscriptText, MP3filename, StatusModel
 
@@ -41,7 +41,6 @@ class GDriveHelper:
         except Exception as e:
             raise e
         return gauth
-
 
     @async_error_handler()
     async def log_status(self) -> None:
@@ -138,13 +137,13 @@ class GDriveHelper:
         return gfile_id
 
     @async_error_handler(error_message = 'Could not download_from_gdrive.')
-    async def download_from_gdrive(self, gdrive_input:GDriveInput, directory: str):
+    async def download_from_gdrive(self, gdrive_input:GDriveInput, directory_path: Path):
         loop = asyncio.get_running_loop()
         def _download():
             gfile = self.drive.CreateFile({'id': gdrive_input.gdrive_id})
             gfile.FetchMetadata(fields="title")
             filename = gfile['title']
-            local_file_path = Path(directory) / filename
+            local_file_path = directory_path / filename
             gfile.GetContentFile(str(local_file_path))
             return local_file_path
 

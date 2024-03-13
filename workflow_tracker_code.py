@@ -15,7 +15,7 @@ from logger_code import LoggerBase
 from pydantic_models import GDriveInput
 
 AUDIO_QUALITY_MAP = {
-    "default":  "openai/whisper-medium.en",
+    "default":  "distil-whisper/distil-large-v2",
     "tiny": "openai/whisper-tiny",
     "tiny.en": "openai/whisper-tiny.en",
     "base": "openai/whisper-base",
@@ -26,6 +26,10 @@ AUDIO_QUALITY_MAP = {
     "medium.en": "openai/whisper-medium.en",
     "large": "openai/whisper-large",
     "large-v2": "openai/whisper-large-v2",
+    "distil-large-v2": "distil-whisper/distil-large-v2",
+    "distil-medium.en": "distil-whisper/distil-medium.en",
+    "distil-small.en": "distil-whisper/distil-small.en",
+
 }
 
 COMPUTE_TYPE_MAP = {
@@ -159,17 +163,6 @@ class WorkflowTracker:
         except (ValidationError, AttributeError, TypeError) as e:
             cls._logger.error(f"Failed to update from TranscriptionModel.Error type: {type(e).__name__} Error: {e}")
 
-    # def to_base_model(self) -> BaseTrackerModel:
-    #     """
-    #     Creates a new instance of BaseTrackerModel containing only the attributes
-    #     defined in BaseTrackerModel, copied from this TranscriptionModel instance.
-    #     """
-    #     base_model_data = {
-    #         'transcript_audio_quality': self.t,
-    #         'transcript_compute_type': self.transcript_compute_type,
-    #         'input_mp3': self.input_mp3,
-    #     }
-    #     return BaseTrackerModel(**base_model_data)
     @classmethod
     def get(cls, field_name):
         if hasattr(cls._model, field_name):

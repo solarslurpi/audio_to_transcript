@@ -3,10 +3,9 @@ from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 from pathlib import Path
 from workflow_states_code import WorkflowEnum
-from workflow_tracker_code import WorkflowTracker
 from env_settings_code import get_settings
 from logger_code import LoggerBase
-from misc_utils import async_error_handler, update_status
+from update_status import async_error_handler, update_status
 import asyncio
 import json
 from googleapiclient.errors import HttpError
@@ -132,20 +131,20 @@ class GDriveHelper:
 
     @async_error_handler(status=WorkflowEnum.ERROR,error_message = 'Could not upload the transcript to a gflie.')
     async def upload_transcript_to_gdrive(self, mp3_gdriveInput: GDriveInput, transcript_text: TranscriptText) -> None:
-            mp3_filename = await self.get_filename(mp3_gdriveInput)
-            # Since we have the gdrive_id for the mp3 file, let us set it because perhaps the caller didn't start at the beginning of the workflow.
-            # This way, we can update the status.
-            self.tracker.mp3_gfile_id = mp3_gdriveInput.gdrive_id
-            txt_filename = mp3_filename[:-4] + '.txt'
-            local_transcript_dir = Path(self.settings.local_transcript_dir)
-            local_transcript_file_path = local_transcript_dir / txt_filename
-            async with aiofiles.open(str(local_transcript_file_path), "w") as temp_file:
-                await temp_file.write(str(transcript_text))
-            folder_gdrive_id = self.settings.gdrive_transcripts_folder_id
-            # returns the gfile id of the transcription file. We will add this to the next update_status so we are tracking within the
-            # mp3 file where the corresponding transcript file is located (by gfile id).
-            transcription_gfile_id = await self.upload(GDriveInput(gdrive_id=folder_gdrive_id),local_transcript_file_path)
-            await update_status(state=WorkflowEnum.TRANSCRIPTION_UPLOAD_COMPLETE, comment='Adding the transcription gfile tracker id', transcript_gdriveid= transcription_gfile_id, store=True)
+        mp3_filename = await self.get_filename(mp3_gdriveInput)
+        # Since we have the gdrive_id for the mp3 file, let us set it because perhaps the caller didn't start at the beginning of the workflow.
+        # This way, we can update the status.
+        self.tracker.mp3_gfile_id = mp3_gdriveInput.gdrive_id
+        txt_filename = mp3_filename[:-4] + '.txt'
+        local_transcript_dir = Path(self.settings.local_transcript_dir)
+        local_transcript_file_path = local_transcript_dir / txt_filename
+        async with aiofiles.open(str(local_transcript_file_path), "w") as temp_file:
+            await temp_file.write(str(transcript_text))
+        folder_gdrive_id = self.settings.gdrive_transcripts_folder_id
+        # returns the gfile id of the transcription file. We will add this to the next update_status so we are tracking within the
+        # mp3 file where the corresponding transcript file is located (by gfile id).
+        transcription_gfile_id = await self.upload(GDriveInput(gdrive_id=folder_gdrive_id),local_transcript_file_path)
+        await update_status(state=WorkflowEnum.TRANSCRIPTION_UPLOAD_COMPLETE, comment='Adding the transcription gfile tracker id', transcript_gdriveid= transcription_gfile_id, store=True)
 
     @async_error_handler(status=WorkflowEnum.ERROR,error_message = 'Could not upload the transcript to gdrive transcript folder.')
     async def upload(self, folder_gdrive_input:GDriveInput, file_path: ValidPath) -> GDriveInput:

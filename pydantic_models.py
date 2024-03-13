@@ -2,7 +2,7 @@ import os
 import re
 from typing import Union
 
-from pydantic import BaseModel, field_validator, Field, HttpUrl
+from pydantic import BaseModel, field_validator, Field, ValidationError
 from fastapi import UploadFile
 
 from workflow_states_code import WorkflowEnum
@@ -92,10 +92,30 @@ class YouTubeUrl(BaseModel):
     @field_validator('yt_url')
     @classmethod
     def validate_youtube_url(cls, v):
-        youtube_regex = (
-            r'(https?://)?(www\.)?'
-            '(youtube|youtu|youtube-nocookie)\.(com|be)/'
-            '(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})')
+        youtube_regex = re.compile(r"""
+            youtube|youtu|youtube-nocookie)\.(com|be)/  # Domain
+            (watch\?v=|embed/|v/|.+\?v=)?                # Path
+             ([^&=%\?]{11})                               # Video ID
+            """, re.VERBOSE)
         if not re.match(youtube_regex, v):
             raise ValueError('Invalid YouTube URL')
         return v
+
+    def validate_yt_url(self, yt_url:str) -> bool:
+        """
+        Validates the given YouTube URL using the YouTubeUrl Pydantic model.
+
+        Returns:
+            bool: True if the URL is valid according to the YouTubeUrl model,
+                False otherwise.
+
+        This function is designed to validate URLs for UI purposes, allowing
+        for user-friendly feedback without raising exceptions that would disrupt
+        the UI flow.
+        """
+        try:
+            # Validate the YouTube URL
+            if YouTubeUrl(yt_url=yt_url):
+                return True
+        except ValidationError:
+            return False

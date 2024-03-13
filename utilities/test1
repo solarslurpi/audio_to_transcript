@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Define the URL of the YouTube video you want to download
+VIDEO_URL="https://www.youtube.com/watch?v=LjkLFhVD3rM"
+
+# Run yt-dlp to download the video's audio in MP3 format with specified settings
+yt-dlp -x --audio-format mp3 --audio-quality 0 \
+       --postprocessor-args "-ar 16000 -ac 1" \
+       -o "%(title)s.%(ext)s" \
+       "$VIDEO_URL"
+
+exit 0  # Ensure the script exits successfully

@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Set the YouTube video URL
+VIDEO_URL="https://www.youtube.com/watch?v=LjkLFhVD3rM"
+
+# Use yt-dlp to get the video title
+TITLE=$(yt-dlp --get-title --no-warnings "$VIDEO_URL")
+
+# Print the video title
+echo "Video Title: $TITLE"
+
+exit 0
