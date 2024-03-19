@@ -1,0 +1,24 @@
+service-account-creds.json
+# Prepend a slash (/) to ignore directories - this will ignore the directory in any subfolder too
+# Ignore pytest cache
+.pytest_cache/
+
+# Ignore virtual environment directory
+.venv/
+
+# Ignore VSCode settings
+.vscode/
+
+# Ignore Python bytecode files
+__pycache__/
+
+# Ignore CUDA files
+CUDA_files/
+
+# others to ignore
+static/
+temp_files/
+.env
+temp_transcripts/
+temp_mp3s/
+tmp/appmap/
